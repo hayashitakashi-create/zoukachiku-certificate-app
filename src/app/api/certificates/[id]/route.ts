@@ -100,7 +100,7 @@ export async function PUT(
         {
           success: false,
           error: 'Invalid input',
-          details: validationResult.error.errors,
+          details: validationResult.error.issues,
         },
         { status: 400 }
       );

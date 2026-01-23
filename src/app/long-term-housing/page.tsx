@@ -15,8 +15,8 @@ const longTermHousingFormSchema = z.object({
       residentRatio: z.number().min(0).max(100).optional(),
     })
   ).min(1, '少なくとも1つの工事を追加してください'),
-  subsidyAmount: z.number().min(0).default(0),
-  isExcellentHousing: z.boolean().default(false),
+  subsidyAmount: z.number().min(0),
+  isExcellentHousing: z.boolean(),
 });
 
 type LongTermHousingFormData = z.infer<typeof longTermHousingFormSchema>;

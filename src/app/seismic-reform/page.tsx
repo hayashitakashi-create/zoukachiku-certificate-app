@@ -16,7 +16,7 @@ const seismicFormSchema = z.object({
       ratio: z.number().min(0).max(100).optional(),
     })
   ).min(1, '少なくとも1つの工事を追加してください'),
-  subsidyAmount: z.number().min(0).default(0),
+  subsidyAmount: z.number().min(0),
 });
 
 type SeismicFormData = z.infer<typeof seismicFormSchema>;
