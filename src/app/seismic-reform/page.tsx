@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import Link from 'next/link';
 import { SEISMIC_WORK_TYPES } from '@/lib/seismic-work-types';
 import type { SeismicCalculationResult } from '@/app/api/seismic-works/types';
 
@@ -73,9 +74,17 @@ export default function SeismicReformPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-5xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          耐震改修工事 計算ツール
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            耐震改修工事 計算ツール
+          </h1>
+          <Link
+            href="/certificate/create?step=3"
+            className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
+          >
+            ← 証明者情報入力へ
+          </Link>
+        </div>
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
@@ -295,6 +304,19 @@ export default function SeismicReformPage() {
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* 証明者情報入力へ進むボタン */}
+            <div className="mt-6 pt-6 border-t">
+              <Link
+                href="/certificate/create?step=3"
+                className="block w-full bg-blue-600 text-white text-center py-3 px-6 rounded-md hover:bg-blue-700 font-medium transition-colors"
+              >
+                次へ：証明者情報入力 →
+              </Link>
+              <p className="text-sm text-gray-600 text-center mt-2">
+                計算結果を確認したら、証明者情報の入力に進んでください
+              </p>
             </div>
           </div>
         )}

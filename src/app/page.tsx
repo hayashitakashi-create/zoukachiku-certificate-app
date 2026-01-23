@@ -65,12 +65,22 @@ export default function HomePage() {
       {/* ヘッダー */}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            増改築等工事証明書 計算ツール
-          </h1>
-          <p className="mt-2 text-gray-600">
-            各種改修工事の標準単価による控除対象額を計算します
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                増改築等工事証明書 計算ツール
+              </h1>
+              <p className="mt-2 text-gray-600">
+                各種改修工事の標準単価による控除対象額を計算します
+              </p>
+            </div>
+            <Link
+              href="/settings"
+              className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+            >
+              ⚙️ 設定
+            </Link>
+          </div>
         </div>
       </div>
 

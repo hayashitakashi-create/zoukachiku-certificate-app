@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import type { IssuerInfo } from '@/types/issuer';
+import IssuerInfoForm from '@/components/IssuerInfoForm';
 
 // ステップの定義
 type WizardStep = 1 | 2 | 3 | 4;
@@ -30,19 +32,26 @@ type CertificateFormData = {
   };
   subsidyAmount: number;
 
-  // ステップ3: 証明者情報
-  issuerName: string;
-  issuerOfficeName: string;
-  issuerOrganizationType: string;
-  issuerQualificationNumber: string;
+  // ステップ3: 証明者情報（新しい構造）
+  issuerInfo: Partial<IssuerInfo> | null;
   issueDate: string;
+
+  // 互換性のため一時的に保持（後で削除予定）
+  issuerName?: string;
+  issuerOfficeName?: string;
+  issuerOrganizationType?: string;
+  issuerQualificationNumber?: string;
 };
 
 export default function CertificateCreatePage() {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState<CertificateFormData>({
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [wasRestored, setWasRestored] = useState(false);
+
+  // 初期値
+  const initialFormData: CertificateFormData = {
     applicantName: '',
     applicantAddress: '',
     propertyNumber: '',
@@ -52,12 +61,125 @@ export default function CertificateCreatePage() {
     selectedWorkTypes: [],
     workData: {},
     subsidyAmount: 0,
+    issuerInfo: null,
+    issueDate: new Date().toISOString().split('T')[0],
+    // 互換性のため
     issuerName: '',
     issuerOfficeName: '',
     issuerOrganizationType: '',
     issuerQualificationNumber: '',
-    issueDate: new Date().toISOString().split('T')[0],
-  });
+  };
+
+  const [formData, setFormData] = useState<CertificateFormData>(initialFormData);
+
+  // ローカルストレージからフォームデータと証明者設定を読み込む（初回のみ）
+  useEffect(() => {
+    // 現在のセッションIDを生成または取得
+    let currentSessionId = sessionStorage.getItem('certificate-session-id');
+    if (!currentSessionId) {
+      currentSessionId = Date.now().toString() + Math.random().toString(36);
+      sessionStorage.setItem('certificate-session-id', currentSessionId);
+    }
+
+    // 保存されたフォームデータを読み込む
+    const savedData = localStorage.getItem('certificate-form-data');
+    let loadedFormData = null;
+
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        const savedSessionId = parsed.sessionId;
+
+        // セッションIDが異なる場合のみ「復元されました」通知を表示
+        // 同じセッション内（ページリロードなし）での自動保存の場合は通知しない
+        if (savedSessionId && savedSessionId !== currentSessionId) {
+          setWasRestored(true);
+          console.log('Restored form data from previous session');
+        } else {
+          console.log('Loaded form data from current session (no notification)');
+        }
+
+        loadedFormData = parsed;
+      } catch (error) {
+        console.error('Failed to parse saved form data:', error);
+      }
+    }
+
+    // 証明者のデフォルト設定を読み込む
+    const savedSettings = localStorage.getItem('issuer-settings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+
+        // 旧データ形式から新形式への移行
+        let issuerSettings: Partial<IssuerInfo> | null = null;
+        if (settings.issuerName && !settings.organizationType) {
+          // 旧形式のデータの場合、デフォルトで登録建築士事務所として扱う
+          issuerSettings = {
+            organizationType: 'registered_architect_office',
+            architectName: settings.issuerName || '',
+            officeName: settings.issuerOfficeName || '',
+            architectRegistrationNumber: settings.issuerQualificationNumber || '',
+          } as any;
+        } else {
+          issuerSettings = settings;
+        }
+
+        if (loadedFormData) {
+          // フォームデータがある場合、証明者情報が空ならデフォルト設定で補完
+          if (!loadedFormData.issuerInfo || !loadedFormData.issuerInfo.organizationType) {
+            loadedFormData = {
+              ...loadedFormData,
+              issuerInfo: issuerSettings,
+            };
+            console.log('Supplemented issuer info from settings');
+          }
+          setFormData(loadedFormData);
+        } else {
+          // フォームデータがない場合、証明者設定のみ読み込む
+          setFormData((prev) => ({
+            ...prev,
+            issuerInfo: issuerSettings,
+          }));
+          console.log('Loaded issuer settings from localStorage:', issuerSettings);
+        }
+      } catch (error) {
+        console.error('Failed to parse saved issuer settings:', error);
+        if (loadedFormData) {
+          setFormData(loadedFormData);
+        }
+      }
+    } else if (loadedFormData) {
+      setFormData(loadedFormData);
+    }
+
+    setIsInitialized(true);
+  }, []);
+
+  // フォームデータが変更されたらローカルストレージに保存
+  useEffect(() => {
+    if (isInitialized) {
+      const currentSessionId = sessionStorage.getItem('certificate-session-id');
+      const dataToSave = {
+        ...formData,
+        sessionId: currentSessionId, // セッションIDを含めて保存
+      };
+      localStorage.setItem('certificate-form-data', JSON.stringify(dataToSave));
+      console.log('Saved form data to localStorage with session ID');
+    }
+  }, [formData, isInitialized]);
+
+  // URLクエリパラメータからステップを取得
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stepParam = params.get('step');
+    if (stepParam) {
+      const step = parseInt(stepParam) as WizardStep;
+      if (step >= 1 && step <= 4) {
+        setCurrentStep(step);
+      }
+    }
+  }, []);
 
   const steps = [
     { number: 1, title: '基本情報', description: '申請者・物件情報' },
@@ -66,26 +188,90 @@ export default function CertificateCreatePage() {
     { number: 4, title: '確認・保存', description: 'プレビューと保存' },
   ];
 
-  const goToStep = (step: WizardStep) => {
+  const goToStep = useCallback((step: WizardStep) => {
+    console.log('goToStep called with step:', step);
     setCurrentStep(step);
-  };
+  }, []);
 
-  const nextStep = () => {
-    if (currentStep < 4) {
-      setCurrentStep((currentStep + 1) as WizardStep);
-    }
-  };
+  const nextStep = useCallback(() => {
+    console.log('nextStep button clicked');
+    setCurrentStep((prev) => {
+      console.log('Current step before transition:', prev);
+      if (prev < 4) {
+        const nextStepNum = (prev + 1) as WizardStep;
+        console.log('Moving to step:', nextStepNum);
+        return nextStepNum;
+      } else {
+        console.log('Already at final step (step 4)');
+        return prev;
+      }
+    });
+  }, []);
 
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep((currentStep - 1) as WizardStep);
+  const prevStep = useCallback(() => {
+    console.log('prevStep clicked');
+    setCurrentStep((prev) => {
+      if (prev > 1) {
+        const prevStepNum = (prev - 1) as WizardStep;
+        console.log('Moving from step', prev, 'to step:', prevStepNum);
+        return prevStepNum;
+      }
+      return prev;
+    });
+  }, []);
+
+  // フォームデータをクリアして新規作成を開始
+  const handleNewForm = useCallback(() => {
+    if (confirm('入力中のデータをクリアして新規作成を開始しますか？')) {
+      localStorage.removeItem('certificate-form-data');
+      // 新しいセッションIDを生成
+      const newSessionId = Date.now().toString() + Math.random().toString(36);
+      sessionStorage.setItem('certificate-session-id', newSessionId);
+      setFormData(initialFormData);
+      setCurrentStep(1);
+      setWasRestored(false); // フラグをリセット
+      console.log('Form data cleared for new certificate with new session ID');
     }
-  };
+  }, [initialFormData]);
 
   // 証明書を保存する関数
   const saveCertificate = async (status: 'draft' | 'completed' | 'issued') => {
     setIsSaving(true);
     try {
+      // issuerInfoオブジェクトから旧形式のフィールドを抽出
+      let issuerName = '';
+      let issuerOfficeName = '';
+      let issuerOrganizationType = '';
+      let issuerQualificationNumber = '';
+
+      if (formData.issuerInfo && formData.issuerInfo.organizationType) {
+        const info = formData.issuerInfo as any;
+        issuerName = info.architectName || '';
+
+        switch (info.organizationType) {
+          case 'registered_architect_office':
+            issuerOfficeName = info.officeName || '';
+            issuerOrganizationType = '登録建築士事務所';
+            issuerQualificationNumber = info.architectRegistrationNumber || '';
+            break;
+          case 'designated_inspection_agency':
+            issuerOfficeName = info.agencyName || '';
+            issuerOrganizationType = '指定確認検査機関';
+            issuerQualificationNumber = info.architectRegistrationNumber || '';
+            break;
+          case 'registered_evaluation_agency':
+            issuerOfficeName = info.agencyName || '';
+            issuerOrganizationType = '登録住宅性能評価機関';
+            issuerQualificationNumber = info.architectRegistrationNumber || '';
+            break;
+          case 'warranty_insurance_corporation':
+            issuerOfficeName = info.corporationName || '';
+            issuerOrganizationType = '住宅瑕疵担保責任保険法人';
+            issuerQualificationNumber = info.architectRegistrationNumber || '';
+            break;
+        }
+      }
+
       const response = await fetch('/api/certificates', {
         method: 'POST',
         headers: {
@@ -100,10 +286,10 @@ export default function CertificateCreatePage() {
           purposeType: formData.purposeType,
           selectedWorkTypes: formData.selectedWorkTypes,
           subsidyAmount: formData.subsidyAmount,
-          issuerName: formData.issuerName,
-          issuerOfficeName: formData.issuerOfficeName,
-          issuerOrganizationType: formData.issuerOrganizationType,
-          issuerQualificationNumber: formData.issuerQualificationNumber || undefined,
+          issuerName,
+          issuerOfficeName,
+          issuerOrganizationType,
+          issuerQualificationNumber: issuerQualificationNumber || undefined,
           issueDate: formData.issueDate,
           status,
         }),
@@ -112,6 +298,16 @@ export default function CertificateCreatePage() {
       const result = await response.json();
 
       if (result.success) {
+        // 証明書が発行された場合のみローカルストレージをクリア
+        if (status === 'issued') {
+          localStorage.removeItem('certificate-form-data');
+          // 新しいセッションIDを生成
+          const newSessionId = Date.now().toString() + Math.random().toString(36);
+          sessionStorage.setItem('certificate-session-id', newSessionId);
+          setWasRestored(false);
+          console.log('Cleared form data from localStorage after issuance');
+        }
+
         alert(
           status === 'draft'
             ? '下書きとして保存しました'
@@ -145,9 +341,8 @@ export default function CertificateCreatePage() {
       !formData.completionDate ||
       !formData.purposeType ||
       formData.selectedWorkTypes.length === 0 ||
-      !formData.issuerName ||
-      !formData.issuerOfficeName ||
-      !formData.issuerOrganizationType ||
+      !formData.issuerInfo ||
+      !formData.issuerInfo.organizationType ||
       !formData.issueDate
     ) {
       alert('必須項目を全て入力してください');
@@ -166,12 +361,26 @@ export default function CertificateCreatePage() {
             <h1 className="text-3xl font-bold text-gray-900">
               増改築等工事証明書 作成
             </h1>
-            <Link
-              href="/"
-              className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
-            >
-              ← トップに戻る
-            </Link>
+            <div className="flex gap-3">
+              <button
+                onClick={handleNewForm}
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                🔄 新規作成
+              </button>
+              <Link
+                href="/settings"
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                ⚙️ 設定
+              </Link>
+              <Link
+                href="/"
+                className="px-4 py-2 text-blue-600 hover:text-blue-800 flex items-center gap-2"
+              >
+                ← トップに戻る
+              </Link>
+            </div>
           </div>
           <p className="text-gray-600">
             各種改修工事の証明書を作成します。必要な情報を順番に入力してください。
@@ -185,6 +394,7 @@ export default function CertificateCreatePage() {
               <div key={step.number} className="flex items-center flex-1">
                 {/* ステップ */}
                 <button
+                  type="button"
                   onClick={() => goToStep(step.number as WizardStep)}
                   className={`flex flex-col items-center ${
                     currentStep >= step.number ? 'opacity-100' : 'opacity-40'
@@ -230,6 +440,15 @@ export default function CertificateCreatePage() {
                 証明書に記載する申請者情報と物件情報を入力してください。
               </p>
 
+              {/* 保存されたデータが復元された場合の通知 */}
+              {wasRestored && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm text-green-800">
+                    💾 前回入力したデータが復元されました。続きから入力できます。
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-6">
                 {/* 申請者情報 */}
                 <div className="border-b pb-6">
@@ -266,24 +485,10 @@ export default function CertificateCreatePage() {
                   </div>
                 </div>
 
-                {/* 物件情報 */}
+                {/* 家屋番号及び所在地 */}
                 <div className="border-b pb-6">
-                  <h3 className="text-lg font-semibold mb-4">物件情報</h3>
+                  <h3 className="text-lg font-semibold mb-4">家屋番号及び所在地</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        家屋番号
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.propertyNumber}
-                        onChange={(e) =>
-                          setFormData({ ...formData, propertyNumber: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="12番地3"
-                      />
-                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         所在地 *
@@ -298,6 +503,27 @@ export default function CertificateCreatePage() {
                         placeholder="東京都千代田区○○ 1-2-3"
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        家屋番号
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.propertyNumber}
+                        onChange={(e) =>
+                          setFormData({ ...formData, propertyNumber: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="12番地3"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 工事情報 */}
+                <div className="border-b pb-6">
+                  <h3 className="text-lg font-semibold mb-4">工事情報</h3>
+                  <div className="max-w-md">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         工事完了年月日 *
@@ -329,8 +555,8 @@ export default function CertificateCreatePage() {
                       },
                       {
                         value: 'reform_tax',
-                        label: '改修促進税制',
-                        description: '投資型減税',
+                        label: '住宅特定改修特別税額控除',
+                        description: '改修促進税制（投資型減税）',
                       },
                       {
                         value: 'resale',
@@ -631,163 +857,61 @@ export default function CertificateCreatePage() {
           {/* ステップ3: 証明者情報 */}
           {currentStep === 3 && (
             <div>
-              <h2 className="text-2xl font-bold mb-6">証明者情報</h2>
-              <p className="text-gray-600 mb-6">
-                証明書を発行する建築士等の情報を入力してください。
-              </p>
-
-              <div className="space-y-6">
-                {/* 証明者基本情報 */}
-                <div className="border-b pb-6">
-                  <h3 className="text-lg font-semibold mb-4">証明者</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        氏名 *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.issuerName}
-                        onChange={(e) =>
-                          setFormData({ ...formData, issuerName: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="山田 一郎"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        所属事務所名 *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.issuerOfficeName}
-                        onChange={(e) =>
-                          setFormData({ ...formData, issuerOfficeName: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="○○建築設計事務所"
-                      />
-                    </div>
-                  </div>
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-2xl font-bold">証明者情報を編集</h2>
+                  <Link
+                    href="/settings"
+                    className="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
+                  >
+                    ⚙️ デフォルト設定
+                  </Link>
                 </div>
+                <p className="text-gray-600">
+                  証明書を発行する建築士等の情報を入力・編集してください。組織種別により必要な情報が異なります。
+                </p>
+              </div>
 
-                {/* 組織タイプ */}
-                <div className="border-b pb-6">
-                  <h3 className="text-lg font-semibold mb-4">組織種別 *</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    証明書を発行できる組織の種類を選択してください
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {[
-                      {
-                        value: 'registered_architect_office',
-                        label: '登録建築士事務所',
-                        description: '建築士事務所登録を受けた事務所',
-                      },
-                      {
-                        value: 'designated_inspection_agency',
-                        label: '指定確認検査機関',
-                        description: '建築基準法に基づく指定機関',
-                      },
-                      {
-                        value: 'registered_evaluation_agency',
-                        label: '登録住宅性能評価機関',
-                        description: '住宅品質確保法に基づく評価機関',
-                      },
-                      {
-                        value: 'warranty_insurance_corporation',
-                        label: '住宅瑕疵担保責任保険法人',
-                        description: '保険法人の建築士',
-                      },
-                    ].map((orgType) => (
-                      <label
-                        key={orgType.value}
-                        className={`flex items-start p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                          formData.issuerOrganizationType === orgType.value
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 hover:border-blue-300'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="issuerOrganizationType"
-                          value={orgType.value}
-                          checked={formData.issuerOrganizationType === orgType.value}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              issuerOrganizationType: e.target.value,
-                            })
-                          }
-                          className="mt-1 mr-3"
-                        />
-                        <div>
-                          <p className="font-medium">{orgType.label}</p>
-                          <p className="text-sm text-gray-600">{orgType.description}</p>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+              {/* 証明者情報フォームコンポーネント */}
+              <IssuerInfoForm
+                issuerInfo={formData.issuerInfo}
+                onChange={(newIssuerInfo) =>
+                  setFormData({ ...formData, issuerInfo: newIssuerInfo })
+                }
+              />
 
-                {/* 資格番号 */}
-                <div className="border-b pb-6">
-                  <h3 className="text-lg font-semibold mb-4">資格情報</h3>
-                  <div className="max-w-md">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      建築士登録番号・資格番号
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.issuerQualificationNumber}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          issuerQualificationNumber: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="例: 第123456号"
-                    />
-                    <p className="mt-2 text-sm text-gray-500">
-                      一級建築士、二級建築士、木造建築士の登録番号等を入力
-                    </p>
-                  </div>
+              {/* 発行日 */}
+              <div className="mt-8 pt-6 border-t">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <span className="text-blue-600">📅</span>
+                  証明書発行日
+                </h3>
+                <p className="text-sm text-gray-500 mb-4">証明書を発行する日付を選択してください</p>
+                <div className="max-w-md">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    発行日 *
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.issueDate}
+                    onChange={(e) =>
+                      setFormData({ ...formData, issueDate: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
+              </div>
 
-                {/* 発行日 */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">証明書発行日</h3>
-                  <div className="max-w-md">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      発行日 *
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.issueDate}
-                      onChange={(e) =>
-                        setFormData({ ...formData, issueDate: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <p className="mt-2 text-sm text-gray-500">
-                      証明書を発行する日付を入力してください
-                    </p>
-                  </div>
-                </div>
-
-                {/* 注意事項 */}
-                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                  <h4 className="font-semibold text-blue-900 mb-2">
-                    証明書発行の要件
-                  </h4>
-                  <ul className="text-sm text-blue-800 list-disc list-inside space-y-1">
-                    <li>建築士等の有資格者による証明が必要です</li>
-                    <li>工事内容を確認できる書類（図面、写真等）の保管が必要です</li>
-                    <li>虚偽の証明は法律により罰せられます</li>
-                  </ul>
-                </div>
+              {/* 注意事項 */}
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <h4 className="font-semibold text-blue-900 mb-2">
+                  証明書発行の要件
+                </h4>
+                <ul className="text-sm text-blue-800 list-disc list-inside space-y-1">
+                  <li>建築士等の有資格者による証明が必要です</li>
+                  <li>工事内容を確認できる書類（図面、写真等）の保管が必要です</li>
+                  <li>虚偽の証明は法律により罰せられます</li>
+                </ul>
               </div>
             </div>
           )}
@@ -806,6 +930,7 @@ export default function CertificateCreatePage() {
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold">基本情報</h3>
                     <button
+                      type="button"
                       onClick={() => goToStep(1)}
                       className="text-sm text-blue-600 hover:text-blue-800"
                     >
@@ -847,7 +972,7 @@ export default function CertificateCreatePage() {
                       <p className="text-gray-600">証明書の用途</p>
                       <p className="font-medium">
                         {formData.purposeType === 'housing_loan' && '住宅借入金等特別控除'}
-                        {formData.purposeType === 'reform_tax' && '改修促進税制'}
+                        {formData.purposeType === 'reform_tax' && '住宅特定改修特別税額控除'}
                         {formData.purposeType === 'resale' && '既存住宅の譲渡所得の特別控除等'}
                         {formData.purposeType === 'property_tax' && '固定資産税の減額'}
                         {!formData.purposeType && '（未選択）'}
@@ -861,6 +986,7 @@ export default function CertificateCreatePage() {
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold">工事内容</h3>
                     <button
+                      type="button"
                       onClick={() => goToStep(2)}
                       className="text-sm text-blue-600 hover:text-blue-800"
                     >
@@ -914,52 +1040,74 @@ export default function CertificateCreatePage() {
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold">証明者情報</h3>
                     <button
+                      type="button"
                       onClick={() => goToStep(3)}
                       className="text-sm text-blue-600 hover:text-blue-800"
                     >
                       編集 →
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600">証明者氏名</p>
-                      <p className="font-medium">
-                        {formData.issuerName || '（未入力）'}
-                      </p>
+                  {formData.issuerInfo && formData.issuerInfo.organizationType ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-600">組織種別</p>
+                        <p className="font-medium">
+                          {formData.issuerInfo.organizationType === 'registered_architect_office' && '登録建築士事務所'}
+                          {formData.issuerInfo.organizationType === 'designated_inspection_agency' && '指定確認検査機関'}
+                          {formData.issuerInfo.organizationType === 'registered_evaluation_agency' && '登録住宅性能評価機関'}
+                          {formData.issuerInfo.organizationType === 'warranty_insurance_corporation' && '住宅瑕疵担保責任保険法人'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">建築士氏名</p>
+                        <p className="font-medium">
+                          {(formData.issuerInfo as any).architectName || '（未入力）'}
+                        </p>
+                      </div>
+                      {formData.issuerInfo.organizationType === 'registered_architect_office' && (
+                        <>
+                          <div>
+                            <p className="text-gray-600">建築士事務所名</p>
+                            <p className="font-medium">
+                              {(formData.issuerInfo as any).officeName || '（未入力）'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">建築士登録番号</p>
+                            <p className="font-medium">
+                              {(formData.issuerInfo as any).architectRegistrationNumber || '（未入力）'}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                      {(formData.issuerInfo.organizationType === 'designated_inspection_agency' ||
+                        formData.issuerInfo.organizationType === 'registered_evaluation_agency' ||
+                        formData.issuerInfo.organizationType === 'warranty_insurance_corporation') && (
+                        <>
+                          <div>
+                            <p className="text-gray-600">機関/法人名</p>
+                            <p className="font-medium">
+                              {(formData.issuerInfo as any).agencyName || (formData.issuerInfo as any).corporationName || '（未入力）'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">建築士登録番号</p>
+                            <p className="font-medium">
+                              {(formData.issuerInfo as any).architectRegistrationNumber || '（未入力）'}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                      <div>
+                        <p className="text-gray-600">発行日</p>
+                        <p className="font-medium">
+                          {formData.issueDate || '（未入力）'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-gray-600">所属事務所名</p>
-                      <p className="font-medium">
-                        {formData.issuerOfficeName || '（未入力）'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">組織種別</p>
-                      <p className="font-medium">
-                        {formData.issuerOrganizationType === 'registered_architect_office' &&
-                          '登録建築士事務所'}
-                        {formData.issuerOrganizationType === 'designated_inspection_agency' &&
-                          '指定確認検査機関'}
-                        {formData.issuerOrganizationType === 'registered_evaluation_agency' &&
-                          '登録住宅性能評価機関'}
-                        {formData.issuerOrganizationType === 'warranty_insurance_corporation' &&
-                          '住宅瑕疵担保責任保険法人'}
-                        {!formData.issuerOrganizationType && '（未選択）'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">資格番号</p>
-                      <p className="font-medium">
-                        {formData.issuerQualificationNumber || '（未入力）'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">発行日</p>
-                      <p className="font-medium">
-                        {formData.issueDate || '（未入力）'}
-                      </p>
-                    </div>
-                  </div>
+                  ) : (
+                    <p className="text-gray-500">証明者情報が入力されていません</p>
+                  )}
                 </div>
 
                 {/* バリデーションエラー表示 */}
@@ -972,9 +1120,8 @@ export default function CertificateCreatePage() {
                   if (!formData.purposeType) errors.push('証明書の用途が未選択です');
                   if (formData.selectedWorkTypes.length === 0)
                     errors.push('工事種別が選択されていません');
-                  if (!formData.issuerName) errors.push('証明者氏名が未入力です');
-                  if (!formData.issuerOfficeName) errors.push('所属事務所名が未入力です');
-                  if (!formData.issuerOrganizationType) errors.push('組織種別が未選択です');
+                  if (!formData.issuerInfo || !formData.issuerInfo.organizationType)
+                    errors.push('証明者情報が未入力です');
                   if (!formData.issueDate) errors.push('発行日が未入力です');
 
                   return errors.length > 0 ? (
@@ -1028,6 +1175,7 @@ export default function CertificateCreatePage() {
         {/* ナビゲーションボタン */}
         <div className="flex justify-between mt-6">
           <button
+            type="button"
             onClick={prevStep}
             disabled={currentStep === 1}
             className="px-6 py-3 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -1035,6 +1183,7 @@ export default function CertificateCreatePage() {
             ← 前へ
           </button>
           <button
+            type="button"
             onClick={nextStep}
             disabled={currentStep === 4}
             className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
