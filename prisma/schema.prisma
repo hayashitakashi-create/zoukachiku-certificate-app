@@ -1,0 +1,323 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 証明書（メインテーブル）
+model Certificate {
+  id        String   @id @default(uuid())
+
+  // 基本情報
+  applicantName    String   // 証明申請者の氏名
+  applicantAddress String   // 証明申請者の住所
+  propertyNumber   String?  // 家屋番号
+  propertyAddress  String   // 所在地
+  completionDate   DateTime // 工事完了年月日
+
+  // 用途区分
+  purposeType String // 'housing_loan' | 'reform_tax' | 'resale' | 'property_tax'
+
+  // 証明書発行者情報
+  issuerName            String?
+  issuerOfficeName      String?
+  issueDate             DateTime?
+  issuerOrganizationType String? // '建築士事務所' | '指定確認検査機関' etc.
+  issuerQualificationNumber String? // 建築士登録番号・資格番号
+
+  // 補助金額（全体）
+  subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
+
+  // ステータス
+  status String @default("draft") // 'draft' | 'completed' | 'issued'
+
+  // リレーション
+  seismicWorks SeismicWork[]
+  barrierFreeWorks BarrierFreeWork[]
+  energySavingWorks EnergySavingWork[]
+  cohabitationWorks CohabitationWork[]
+  childcareWorks ChildcareWork[]
+  otherRenovationWorks OtherRenovationWork[]
+  longTermHousingWorks LongTermHousingWork[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 耐震改修工事
+model SeismicWork {
+  id            String   @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  workTypeCode  String   // 工事種別コード（seismic_wood_foundation等）
+  workName      String   // 工事名称
+  unitPrice     Decimal  @db.Decimal(10, 2) // 単価
+  unit          String   // 単位（㎡、箇所など）
+  quantity      Decimal  @db.Decimal(10, 2) // 数量
+  ratio         Decimal? @db.Decimal(5, 2)  // 割合（マンション時のみ、0-100）
+
+  calculatedAmount Decimal @db.Decimal(12, 2) // 計算金額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+  @@index([workTypeCode])
+}
+
+// 耐震改修のサマリー（計算結果を保存）
+model SeismicSummary {
+  id            String  @id @default(uuid())
+  certificateId String  @unique
+
+  totalAmount   Decimal @db.Decimal(12, 2) // 合計金額
+  subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
+  deductibleAmount Decimal @db.Decimal(12, 2) // 控除対象額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+}
+
+// バリアフリー改修工事
+model BarrierFreeWork {
+  id            String   @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  workTypeCode  String   // 工事種別コード（bf_passage_expansion等）
+  workName      String   // 工事名称
+  unitPrice     Decimal  @db.Decimal(10, 2) // 単価
+  unit          String   // 単位（㎡、箇所、m など）
+  quantity      Decimal  @db.Decimal(10, 2) // 数量
+  ratio         Decimal? @db.Decimal(5, 2)  // 割合（居住用部分の割合、0-100）
+
+  calculatedAmount Decimal @db.Decimal(12, 2) // 計算金額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+  @@index([workTypeCode])
+}
+
+// バリアフリー改修のサマリー（計算結果を保存）
+model BarrierFreeSummary {
+  id            String  @id @default(uuid())
+  certificateId String  @unique
+
+  totalAmount   Decimal @db.Decimal(12, 2) // 合計金額
+  subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
+  deductibleAmount Decimal @db.Decimal(12, 2) // 控除対象額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+}
+
+// 省エネ改修工事
+model EnergySavingWork {
+  id            String   @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  workTypeCode  String   // 工事種別コード（es_glass_all_regions等）
+  workName      String   // 工事名称
+  category      String   // カテゴリ（窓、断熱、設備、太陽光発電）
+  regionCode    String?  // 地域区分（1-3、4-7など、該当する場合のみ）
+  unitPrice     Decimal  @db.Decimal(10, 2) // 単価
+  unit          String   // 単位（㎡、台、kW など）
+  quantity      Decimal  @db.Decimal(10, 2) // 数量
+  windowRatio   Decimal? @db.Decimal(5, 2)  // 窓面積割合（窓工事時のみ、0-100）
+  residentRatio Decimal? @db.Decimal(5, 2)  // 居住用部分の割合（0-100）
+
+  calculatedAmount Decimal @db.Decimal(12, 2) // 計算金額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+  @@index([workTypeCode])
+  @@index([category])
+}
+
+// 省エネ改修のサマリー（計算結果を保存）
+model EnergySavingSummary {
+  id            String  @id @default(uuid())
+  certificateId String  @unique
+
+  totalAmount   Decimal @db.Decimal(12, 2) // 合計金額
+  subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
+  deductibleAmount Decimal @db.Decimal(12, 2) // 控除対象額
+  hasSolarPower Boolean @default(false) // 太陽光発電併設か（上限350万円か250万円か）
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+}
+
+// 同居対応改修工事
+model CohabitationWork {
+  id            String   @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  workTypeCode  String   // 工事種別コード（cohab_kitchen等）
+  workName      String   // 工事名称
+  category      String   // カテゴリ（台所、浴室、便所、玄関、給排水設備）
+  unitPrice     Decimal  @db.Decimal(10, 2) // 単価
+  unit          String   // 単位（箇所）
+  quantity      Decimal  @db.Decimal(10, 2) // 数量（箇所数）
+  residentRatio Decimal? @db.Decimal(5, 2)  // 居住用部分の割合（0-100）
+
+  calculatedAmount Decimal @db.Decimal(12, 2) // 計算金額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+  @@index([workTypeCode])
+  @@index([category])
+}
+
+// 同居対応改修のサマリー（計算結果を保存）
+model CohabitationSummary {
+  id            String  @id @default(uuid())
+  certificateId String  @unique
+
+  totalAmount   Decimal @db.Decimal(12, 2) // 合計金額
+  subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
+  deductibleAmount Decimal @db.Decimal(12, 2) // 控除対象額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+}
+
+// 子育て対応改修工事
+model ChildcareWork {
+  id            String   @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  workTypeCode  String   // 工事種別コード（childcare_dishwasher等）
+  workName      String   // 工事名称
+  category      String   // カテゴリ（家事負担軽減、事故防止、収納、居室、その他）
+  unitPrice     Decimal  @db.Decimal(10, 2) // 単価
+  unit          String   // 単位（台、箇所、㎡、m など）
+  quantity      Decimal  @db.Decimal(10, 2) // 数量
+  residentRatio Decimal? @db.Decimal(5, 2)  // 居住用部分の割合（0-100）
+
+  calculatedAmount Decimal @db.Decimal(12, 2) // 計算金額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+  @@index([workTypeCode])
+  @@index([category])
+}
+
+// 子育て対応改修のサマリー（計算結果を保存）
+model ChildcareSummary {
+  id            String  @id @default(uuid())
+  certificateId String  @unique
+
+  totalAmount   Decimal @db.Decimal(12, 2) // 合計金額
+  subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
+  deductibleAmount Decimal @db.Decimal(12, 2) // 控除対象額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+}
+
+// その他増改築等工事
+model OtherRenovationWork {
+  id            String   @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  categoryCode  String   // カテゴリコード（other_large_repair等）
+  categoryName  String   // カテゴリ名称
+  workDescription String // 工事の説明（自由入力）
+  amount        Decimal  @db.Decimal(12, 2) // 工事金額（直接入力）
+  residentRatio Decimal? @db.Decimal(5, 2)  // 居住用部分の割合（0-100）
+
+  calculatedAmount Decimal @db.Decimal(12, 2) // 計算金額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+  @@index([categoryCode])
+}
+
+// その他増改築のサマリー（計算結果を保存）
+model OtherRenovationSummary {
+  id            String  @id @default(uuid())
+  certificateId String  @unique
+
+  totalAmount   Decimal @db.Decimal(12, 2) // 合計金額
+  subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
+  deductibleAmount Decimal @db.Decimal(12, 2) // 控除対象額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+}
+
+// 長期優良住宅化改修工事
+model LongTermHousingWork {
+  id            String   @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  workTypeCode  String   // 工事種別コード（lth_antiseptic_treatment等）
+  workName      String   // 工事名称
+  category      String   // カテゴリ（劣化対策、耐震性、維持管理、省エネルギー性、可変性、バリアフリー性、居住環境、構造補強、設備更新、その他）
+  unitPrice     Decimal  @db.Decimal(10, 2) // 単価
+  unit          String   // 単位（㎡、箇所、m、台、式、kW など）
+  quantity      Decimal  @db.Decimal(10, 2) // 数量
+  residentRatio Decimal? @db.Decimal(5, 2)  // 居住用部分の割合（0-100）
+
+  calculatedAmount Decimal @db.Decimal(12, 2) // 計算金額
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+  @@index([workTypeCode])
+  @@index([category])
+}
+
+// 長期優良住宅化改修のサマリー（計算結果を保存）
+model LongTermHousingSummary {
+  id            String  @id @default(uuid())
+  certificateId String  @unique
+
+  totalAmount   Decimal @db.Decimal(12, 2) // 合計金額
+  subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
+  deductibleAmount Decimal @db.Decimal(12, 2) // 控除対象額
+  isExcellentHousing Boolean @default(false) // 長期優良住宅認定取得か（上限500万円か250万円か）
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+}
