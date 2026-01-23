@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { updateCertificateRequestSchema } from '../types';
 import type { CertificateResponse } from '../types';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/certificates/:id
  * 特定の証明書を取得
