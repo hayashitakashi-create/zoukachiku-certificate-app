@@ -246,9 +246,9 @@ export default function CertificateDetailPage({
                 if (certificate) {
                   // Use housing loan PDF generator for housing_loan purpose type
                   if (certificate.purposeType === 'housing_loan') {
-                    generateHousingLoanCertificatePDF(certificate);
+                    generateHousingLoanCertificatePDF(certificate as any);
                   } else {
-                    generateCertificatePDF(certificate);
+                    generateCertificatePDF(certificate as any);
                   }
                 }
               }}
