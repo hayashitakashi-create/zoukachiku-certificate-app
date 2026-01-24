@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -23,7 +23,7 @@ import {
   defaultWork6,
 } from '@/types/housingLoanDetail';
 
-export default function HousingLoanDetailPage() {
+function HousingLoanDetailContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const certificateId = searchParams.get('certificateId');
@@ -645,47 +645,171 @@ export default function HousingLoanDetailPage() {
                 </div>
               </div>
 
-              {/* 住宅性能証明書 */}
+              {/* 改修工事後の住宅の一定の省エネ性能が証明される場合 */}
               <div className="mb-6 p-4 bg-purple-50 rounded-lg">
                 <h4 className="font-semibold mb-4 text-purple-900">
-                  住宅性能証明書
+                  改修工事後の住宅の一定の省エネ性能が証明される場合
                 </h4>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        一次エネルギー消費量等級
+                  {/* 1. エネルギーの使用の合理化に著しく資する次に該当する修繕若しくは模様替又はエネルギーの使用の合理化に相当程度資する次に該当する修繕若しくは模様替 */}
+                  <div className="p-3 bg-white border border-purple-200 rounded">
+                    <p className="text-sm font-medium mb-3">1. エネルギーの使用の合理化に著しく資する次に該当する修繕若しくは模様替又はエネルギーの使用の合理化に相当程度資する次に該当する修繕若しくは模様替</p>
+                    <div className="ml-3 space-y-2">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          {...register('workTypes.work6.perfCert.workType1Window')}
+                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                        />
+                        <span className="text-sm">□ 1 窓の断熱性を高める工事</span>
                       </label>
-                      <select
-                        {...register('workTypes.work6.perfCert.energyGrade')}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      >
-                        <option value="">選択してください</option>
-                        <option value="1">等級1</option>
-                        <option value="2">等級2</option>
-                        <option value="3">等級3</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        断熱等性能等級
-                      </label>
-                      <select
-                        {...register('workTypes.work6.perfCert.insulationGrade')}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                      >
-                        <option value="">選択してください</option>
-                        <option value="1">等級1</option>
-                        <option value="2">等級2</option>
-                        <option value="3">等級3</option>
-                        <option value="4+">等級4以上</option>
-                      </select>
+
+                      <p className="text-xs font-medium mt-3 mb-2 text-gray-700">上記1と併せて行う次のいずれかに該当する修繕又は模様替</p>
+                      <div className="ml-4 space-y-2">
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            {...register('workTypes.work6.perfCert.workType2Ceiling')}
+                            className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                          />
+                          <span className="text-sm">□ 2 天井等の断熱性を高める工事</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            {...register('workTypes.work6.perfCert.workType3Wall')}
+                            className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                          />
+                          <span className="text-sm">□ 3 壁の断熱性を高める工事</span>
+                        </label>
+                        <label className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            {...register('workTypes.work6.perfCert.workType4Floor')}
+                            className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                          />
+                          <span className="text-sm">□ 4 床等の断熱性を高める工事</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
 
+                  {/* 2. 地域区分 */}
                   <div>
                     <label className="block text-sm font-medium mb-2">
-                      発行機関名称
+                      2. 地域区分
+                      <a
+                        href="https://www.mlit.go.jp/common/001500182.pdf"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-2 text-xs text-purple-600 hover:text-purple-800 underline"
+                      >
+                        （地域区分を確認する）
+                      </a>
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {['1', '2', '3', '4', '5', '6', '7', '8'].map((region) => (
+                        <label key={region} className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            value={region}
+                            {...register('workTypes.work6.perfCert.region')}
+                            className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                          />
+                          <span className="text-sm">{region}地域</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 3. 改修工事前の住宅が相当する断熱等性能等級 */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      3. 改修工事前の住宅が相当する断熱等性能等級
+                    </label>
+                    <div className="flex gap-4">
+                      {['1', '2', '3'].map((grade) => (
+                        <label key={grade} className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            value={grade}
+                            {...register('workTypes.work6.perfCert.energyGradeBefore')}
+                            className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                          />
+                          <span className="text-sm">等級{grade}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 4. 改修工事後の住宅の断熱等性能等級 */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      4. 改修工事後の住宅の断熱等性能等級
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          value="2"
+                          {...register('workTypes.work6.perfCert.insulationGradeAfter')}
+                          className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                        />
+                        <span className="text-sm">断熱等性能等級2</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          value="3"
+                          {...register('workTypes.work6.perfCert.insulationGradeAfter')}
+                          className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                        />
+                        <span className="text-sm">断熱等性能等級3</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          value="4+"
+                          {...register('workTypes.work6.perfCert.insulationGradeAfter')}
+                          className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                        />
+                        <span className="text-sm">断熱等性能等級4以上</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* 5. 住宅性能評価書を交付した登録住宅性能評価機関 */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      5. 住宅性能評価書を交付した登録住宅性能評価機関
+                    </label>
+                    <input
+                      type="text"
+                      {...register('workTypes.work6.perfCert.energyEvaluation')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      placeholder=""
+                    />
+                  </div>
+
+                  {/* 6. 住宅性能評価書の交付番号 */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      6. 住宅性能評価書の交付番号
+                    </label>
+                    <input
+                      type="text"
+                      {...register('workTypes.work6.perfCert.evalIssueNumber')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      placeholder="第　　　　　号"
+                    />
+                  </div>
+
+                  <hr className="my-4 border-purple-200" />
+
+                  {/* 以下は既存の項目（参考用） */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      名称
                     </label>
                     <input
                       type="text"
@@ -709,7 +833,7 @@ export default function HousingLoanDetailPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2">
-                        交付番号
+                        住宅性能評価書の交付番号
                       </label>
                       <input
                         type="text"
@@ -722,7 +846,7 @@ export default function HousingLoanDetailPage() {
 
                   <div>
                     <label className="block text-sm font-medium mb-2">
-                      交付年月日
+                      住宅性能評価書の交付年月日
                     </label>
                     <input
                       type="date"
@@ -989,5 +1113,13 @@ export default function HousingLoanDetailPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function HousingLoanDetailPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+      <HousingLoanDetailContent />
+    </Suspense>
   );
 }

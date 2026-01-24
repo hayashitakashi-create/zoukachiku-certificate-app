@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,7 +23,7 @@ const seismicFormSchema = z.object({
 
 type SeismicFormData = z.infer<typeof seismicFormSchema>;
 
-export default function SeismicReformPage() {
+function SeismicReformContent() {
   const searchParams = useSearchParams();
   const certificateId = searchParams.get('certificateId');
 
@@ -429,5 +429,13 @@ export default function SeismicReformPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function SeismicReformPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+      <SeismicReformContent />
+    </Suspense>
   );
 }
