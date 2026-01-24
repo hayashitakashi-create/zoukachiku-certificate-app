@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { generateCertificatePDF } from '@/lib/pdfGenerator';
-import { generateHousingLoanCertificatePDF } from '@/lib/housingLoanPdfGenerator';
 import { calculateCertificateCost, getWorkTypeBreakdown } from '@/lib/certificateCostCalculator';
 
 type WorkItem = {
@@ -241,14 +240,38 @@ export default function CertificateDetailPage({
             </span>
           </div>
           <div className="flex gap-3">
+            {/* 編集ボタン - 住宅借入金等特別控除の場合は専用編集ページへ */}
+            {certificate.purposeType === 'housing_loan' ? (
+              <Link
+                href={`/certificate/housing-loan-detail?certificateId=${certificate.id}`}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                ✏️ 編集
+              </Link>
+            ) : (
+              <button
+                onClick={() => {
+                  alert('この証明書タイプの編集機能は準備中です');
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                ✏️ 編集
+              </button>
+            )}
+
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (certificate) {
-                  // Use housing loan PDF generator for housing_loan purpose type
-                  if (certificate.purposeType === 'housing_loan') {
-                    generateHousingLoanCertificatePDF(certificate as any);
-                  } else {
-                    generateCertificatePDF(certificate as any);
+                  try {
+                    // Use API endpoint for housing_loan purpose type PDF download
+                    if (certificate.purposeType === 'housing_loan') {
+                      window.location.href = `/api/certificates/${certificate.id}/pdf`;
+                    } else {
+                      generateCertificatePDF(certificate as any);
+                    }
+                  } catch (error) {
+                    console.error('PDF download error:', error);
+                    alert('PDFのダウンロードに失敗しました');
                   }
                 }
               }}

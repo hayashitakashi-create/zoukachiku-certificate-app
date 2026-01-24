@@ -27,6 +27,7 @@ export async function GET(
         childcareWorks: true,
         otherRenovationWorks: true,
         longTermHousingWorks: true,
+        housingLoanDetail: true,
       },
     });
 
@@ -40,7 +41,7 @@ export async function GET(
       );
     }
 
-    const response: CertificateResponse & { works?: any } = {
+    const response: CertificateResponse & { works?: any; housingLoanDetail?: any } = {
       id: certificate.id,
       applicantName: certificate.applicantName,
       applicantAddress: certificate.applicantAddress,
@@ -57,6 +58,15 @@ export async function GET(
       status: certificate.status,
       createdAt: certificate.createdAt.toISOString(),
       updatedAt: certificate.updatedAt.toISOString(),
+      housingLoanDetail: certificate.housingLoanDetail ? {
+        id: certificate.housingLoanDetail.id,
+        workTypes: certificate.housingLoanDetail.workTypes,
+        workDescription: certificate.housingLoanDetail.workDescription,
+        totalCost: Number(certificate.housingLoanDetail.totalCost),
+        hasSubsidy: certificate.housingLoanDetail.hasSubsidy,
+        subsidyAmount: Number(certificate.housingLoanDetail.subsidyAmount),
+        deductibleAmount: Number(certificate.housingLoanDetail.deductibleAmount),
+      } : null,
       works: {
         seismic: certificate.seismicWorks.map((work) => ({
           ...work,

@@ -8,6 +8,17 @@
 import jsPDF from 'jspdf';
 import { calculateCertificateCost, getWorkTypeBreakdown } from './certificateCostCalculator';
 import type { WorkData } from './certificateCostCalculator';
+import type { HousingLoanWorkTypes } from '@/types/housingLoanDetail';
+
+interface HousingLoanDetail {
+  id: string;
+  workTypes: HousingLoanWorkTypes;
+  workDescription: string | null;
+  totalCost: number;
+  hasSubsidy: boolean;
+  subsidyAmount: number;
+  deductibleAmount: number;
+}
 
 interface CertificateData {
   id: string;
@@ -23,6 +34,94 @@ interface CertificateData {
   issuerQualificationNumber: string | null;
   issueDate: string | null;
   works?: WorkData;
+  housingLoanDetail?: HousingLoanDetail | null;
+}
+
+/**
+ * HousingLoanDetail から工事種別の表示用データを生成
+ */
+function getHousingLoanWorkBreakdown(housingLoanDetail: HousingLoanDetail | null | undefined) {
+  const breakdown: Array<{
+    classificationNumber: number;
+    classification: string;
+    label: string;
+    hasWork: boolean;
+  }> = [];
+
+  if (!housingLoanDetail || !housingLoanDetail.workTypes) {
+    // デフォルトで全ての工事種別を空で返す
+    return [
+      { classificationNumber: 1, classification: '第1号', label: '増築、改築、大規模の修繕、大規模の模様替', hasWork: false },
+      { classificationNumber: 2, classification: '第2号', label: '区分所有建物の過半の修繕又は模様替', hasWork: false },
+      { classificationNumber: 3, classification: '第3号', label: '一室の床又は壁の全部の修繕又は模様替', hasWork: false },
+      { classificationNumber: 4, classification: '第4号', label: '耐震改修工事', hasWork: false },
+      { classificationNumber: 5, classification: '第5号', label: 'バリアフリー改修工事', hasWork: false },
+      { classificationNumber: 6, classification: '第6号', label: '省エネ改修等その他の増改築等工事', hasWork: false },
+    ];
+  }
+
+  const { workTypes } = housingLoanDetail;
+
+  // 第1号工事
+  const hasWork1 = workTypes.work1 && Object.values(workTypes.work1).some(v => v === true);
+  breakdown.push({
+    classificationNumber: 1,
+    classification: '第1号',
+    label: '増築、改築、大規模の修繕、大規模の模様替',
+    hasWork: hasWork1 || false,
+  });
+
+  // 第2号工事
+  const hasWork2 = workTypes.work2 && Object.values(workTypes.work2).some(v => v === true);
+  breakdown.push({
+    classificationNumber: 2,
+    classification: '第2号',
+    label: '区分所有建物の過半の修繕又は模様替',
+    hasWork: hasWork2 || false,
+  });
+
+  // 第3号工事
+  const hasWork3 = workTypes.work3 && Object.values(workTypes.work3).some(v => v === true);
+  breakdown.push({
+    classificationNumber: 3,
+    classification: '第3号',
+    label: '一室の床又は壁の全部の修繕又は模様替',
+    hasWork: hasWork3 || false,
+  });
+
+  // 第4号工事
+  const hasWork4 = workTypes.work4 && Object.values(workTypes.work4).some(v => v === true);
+  breakdown.push({
+    classificationNumber: 4,
+    classification: '第4号',
+    label: '耐震改修工事',
+    hasWork: hasWork4 || false,
+  });
+
+  // 第5号工事
+  const hasWork5 = workTypes.work5 && Object.values(workTypes.work5).some(v => v === true);
+  breakdown.push({
+    classificationNumber: 5,
+    classification: '第5号',
+    label: 'バリアフリー改修工事',
+    hasWork: hasWork5 || false,
+  });
+
+  // 第6号工事
+  const hasWork6 = workTypes.work6 && (
+    (workTypes.work6.energyEfficiency && Object.values(workTypes.work6.energyEfficiency).some(v => v === true)) ||
+    workTypes.work6.lowCarbonCert !== undefined ||
+    workTypes.work6.perfCert !== undefined ||
+    workTypes.work6.energyEfficiency2 !== undefined
+  );
+  breakdown.push({
+    classificationNumber: 6,
+    classification: '第6号',
+    label: '省エネ改修等その他の増改築等工事',
+    hasWork: hasWork6 || false,
+  });
+
+  return breakdown;
 }
 
 /**
@@ -112,27 +211,48 @@ export function generateHousingLoanCertificatePDF(certificate: CertificateData) 
   doc.text('(1) Jisshi shita Koji no Shubetsu (Types of Work Performed):', 20, yPos);
   yPos += 8;
 
-  // 工事費用計算
-  const calculation = calculateCertificateCost(certificate.works || {}, certificate.subsidyAmount);
-  const workBreakdown = getWorkTypeBreakdown(calculation);
+  // HousingLoanDetail がある場合はそちらを使用、ない場合は旧形式
+  let workBreakdown;
+  let totalCost = 0;
+  let subsidyAmount = certificate.subsidyAmount;
+  let deductibleAmount = 0;
+  let meetsRequirement = false;
+
+  if (certificate.housingLoanDetail) {
+    // 新形式: HousingLoanDetail を使用
+    workBreakdown = getHousingLoanWorkBreakdown(certificate.housingLoanDetail);
+    totalCost = certificate.housingLoanDetail.totalCost;
+    subsidyAmount = certificate.housingLoanDetail.subsidyAmount;
+    deductibleAmount = certificate.housingLoanDetail.deductibleAmount;
+    meetsRequirement = deductibleAmount >= 1000000;
+  } else {
+    // 旧形式: calculateCertificateCost を使用（後方互換性のため）
+    const calculation = calculateCertificateCost(certificate.works || {}, certificate.subsidyAmount);
+    workBreakdown = getWorkTypeBreakdown(calculation);
+    totalCost = calculation.totalWorkCost;
+    subsidyAmount = calculation.subsidyAmount;
+    deductibleAmount = calculation.deductibleAmount;
+    meetsRequirement = calculation.meetsHousingLoanRequirement;
+  }
 
   // 第1号〜第6号の工事種別をチェックボックス形式で表示
-  workBreakdown.forEach((work) => {
+  workBreakdown.forEach((work: any) => {
     const checkbox = work.hasWork ? '[✓]' : '[ ]';
     doc.text(`${checkbox} Dai ${work.classificationNumber}-go Koji: ${work.label}`, 25, yPos);
     yPos += 6;
 
-    if (work.hasWork && work.amount > 0) {
+    // 旧形式の場合のみ金額を表示（新形式では金額情報がないため）
+    if (!certificate.housingLoanDetail && work.hasWork && work.amount > 0) {
       doc.setFontSize(9);
       doc.text(`    Kingaku (Amount): ¥${work.amount.toLocaleString()}`, 30, yPos);
       yPos += 5;
       doc.setFontSize(10);
     }
 
-    // 第6号工事の場合、サブ項目を表示
-    if (work.classificationNumber === 6 && work.subItems) {
+    // 第6号工事の場合、サブ項目を表示（旧形式のみ）
+    if (!certificate.housingLoanDetail && work.classificationNumber === 6 && work.subItems) {
       doc.setFontSize(9);
-      work.subItems.forEach((subItem) => {
+      work.subItems.forEach((subItem: any) => {
         if (subItem.amount > 0) {
           doc.text(`    - ${subItem.label}: ¥${subItem.amount.toLocaleString()}`, 35, yPos);
           yPos += 5;
@@ -144,28 +264,88 @@ export function generateHousingLoanCertificatePDF(certificate: CertificateData) 
 
   yPos += 5;
 
-  // ===== 工事費用合計 =====
-  doc.setFont('helvetica', 'bold');
-  doc.text(`(2) Koji Hiyo Gokei (Total Work Cost):`, 20, yPos);
-  doc.text(`¥${calculation.totalWorkCost.toLocaleString()}`, 140, yPos);
-  yPos += 8;
+  // ===== (2) 実施した工事の内容 =====
+  if (certificate.housingLoanDetail && certificate.housingLoanDetail.workDescription) {
+    // 新しいページが必要な場合
+    if (yPos > 240) {
+      doc.addPage();
+      yPos = 20;
+    }
 
-  // ===== 補助金額 =====
-  doc.setFont('helvetica', 'normal');
-  doc.text(`(3) Hojokingaku (Subsidy Amount):`, 20, yPos);
-  doc.text(`¥${calculation.subsidyAmount.toLocaleString()}`, 140, yPos);
-  yPos += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('(2) Jisshi shita Koji no Naiyo (Work Description):', 20, yPos);
+    yPos += 8;
 
-  // ===== 控除対象額 =====
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+
+    // workDescriptionを行に分割して表示（改行文字で分割）
+    const descriptionLines = certificate.housingLoanDetail.workDescription.split('\n');
+    const maxWidth = 170; // 最大幅（mm）
+
+    descriptionLines.forEach((line) => {
+      if (line.trim() === '') {
+        // 空行の場合は少しスペースを追加
+        yPos += 4;
+        return;
+      }
+
+      // 長い行は自動的に折り返す
+      const wrappedLines = doc.splitTextToSize(line, maxWidth);
+      wrappedLines.forEach((wrappedLine: string) => {
+        // ページ境界チェック
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+        doc.text(wrappedLine, 22, yPos);
+        yPos += 4;
+      });
+    });
+
+    yPos += 8;
+    doc.setFontSize(10);
+  }
+
+  // 新しいページが必要な場合
+  if (yPos > 240) {
+    doc.addPage();
+    yPos = 20;
+  }
+
+  // ===== (3) 実施した工事の費用の概要 =====
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text(`(4) Kojo Taisho-gaku (Deductible Amount):`, 20, yPos);
-  doc.text(`¥${calculation.deductibleAmount.toLocaleString()}`, 140, yPos);
+  doc.text('(3) Jisshi shita Koji no Hiyo no Gaiyo (Cost Overview):', 20, yPos);
+  yPos += 8;
+
+  // ===== (3)-① 工事費用合計 =====
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text(`1) Dai 1-go ~ Dai 6-go Koji ni Yosu Hiyo (Total Work Cost):`, 22, yPos);
+  yPos += 6;
+  doc.text(`¥${totalCost.toLocaleString()}`, 140, yPos);
+  yPos += 10;
+
+  // ===== (3)-② 補助金額 =====
+  doc.setFont('helvetica', 'normal');
+  doc.text(`2) Hojokingaku (Subsidy Amount):`, 22, yPos);
+  yPos += 6;
+  doc.text(`¥${subsidyAmount.toLocaleString()}`, 140, yPos);
+  yPos += 10;
+
+  // ===== (3)-③ 控除対象額 =====
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text(`3) Kojo Taisho-gaku (Deductible Amount):`, 22, yPos);
+  yPos += 6;
+  doc.text(`¥${deductibleAmount.toLocaleString()}`, 140, yPos);
   doc.setFontSize(10);
   yPos += 10;
 
   // ===== 要件チェック =====
-  if (calculation.meetsHousingLoanRequirement) {
+  if (meetsRequirement) {
     doc.setFont('helvetica', 'normal');
     doc.text('✓ Yoken wo Mitashite Imasu (Meets the requirement: ¥1,000,000+)', 20, yPos);
   } else {

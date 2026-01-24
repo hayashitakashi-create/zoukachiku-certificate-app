@@ -11,17 +11,17 @@ export interface Work1Type {
   majorRemodeling: boolean; // 4 大規模の模様替
 }
 
-// 第2号工事: 床・窓・間仕切壁・界壁の断熱工事または模様替
+// 第2号工事: 区分所有建物の過半の修繕または模様替
 export interface Work2Type {
-  floorInsulation: boolean;      // 1 床の断熱工事又は模様替
-  windowRenovation: boolean;     // 2 窓の改修の修繕又は模様替
-  partitionInsulation: boolean;  // 3 間仕切壁の断熱工事又は模様替
-  boundaryRepair: boolean;       // 4 境の通常の修繕又は模様替
+  floorOverHalf: boolean;      // 1 床の過半の修繕又は模様替
+  stairOverHalf: boolean;      // 2 階段の過半の修繕又は模様替
+  partitionOverHalf: boolean;  // 3 間仕切壁の過半の修繕又は模様替
+  wallOverHalf: boolean;       // 4 壁の過半の修繕又は模様替
 }
 
-// 第3号工事: 耐震、調理室、浴室、便所、洗面所、納戸、玄関、廊下の設置または改修
+// 第3号工事: 一室の床又は壁の全部の修繕又は模様替
 export interface Work3Type {
-  seismic: boolean;    // 1 耐震
+  livingRoom: boolean; // 1 居室
   kitchen: boolean;    // 2 調理室
   bathroom: boolean;   // 3 浴室
   toilet: boolean;     // 4 便所
@@ -33,8 +33,8 @@ export interface Work3Type {
 
 // 第4号工事: 耐震改修工事
 export interface Work4Type {
-  seismicOrder: boolean;   // 1 建築基準法に基づく命令及び勧告に対応する改修
-  groundSafety: boolean;   // 2 地盤に対する安全性に係る基準
+  buildingStandard: boolean;  // 1 建築基準法施行令第3章及び第5章の4の規定
+  earthquakeSafety: boolean;  // 2 地震に対する安全性に係る基準
 }
 
 // 第5号工事: バリアフリー改修工事
@@ -64,7 +64,14 @@ export interface Work6Type {
     combinedFloorInsulation: boolean;          // 4 床等の断熱性を高める工事
 
     // 地域区分
-    region?: string;  // "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8"
+    region1?: boolean;
+    region2?: boolean;
+    region3?: boolean;
+    region4?: boolean;
+    region5?: boolean;
+    region6?: boolean;
+    region7?: boolean;
+    region8?: boolean;
 
     // 改修工事前の住宅の一次エネルギー消費量等級
     energyGradeBefore?: string;  // "1" | "2" | "3"
@@ -87,31 +94,53 @@ export interface Work6Type {
 
   // 住宅性能証明書
   perfCert?: {
-    energyGrade?: string;       // 一次エネルギー消費量等級 "1" | "2" | "3"
-    insulationGrade?: string;   // 断熱等性能等級 "1" | "2" | "3" | "4+"
-    orgName?: string;           // 発行機関名称
-    regNumber?: string;         // 登録番号
-    issueNumber?: string;       // 交付番号
-    issueDate?: string;         // 交付年月日 (YYYY-MM-DD)
+    workType1Window?: boolean;      // 1 窓の断熱性を高める工事
+    workType2Ceiling?: boolean;     // 2 天井等の断熱性を高める工事
+    workType3Wall?: boolean;        // 3 壁の断熱性を高める工事
+    workType4Floor?: boolean;       // 4 床等の断熱性を高める工事
+    region?: string;                // 地域区分
+    energyGradeBefore?: string;     // 改修工事前の住宅が相当する断熱等性能等級
+    insulationGradeAfter?: string;  // 改修工事後の住宅の断熱等性能等級
+    energyEvaluation?: string;      // 住宅性能評価書を交付した登録住宅性能評価機関
+    evalIssueNumber?: string;       // 住宅性能評価書の交付番号
+    energyGrade?: string;           // 一次エネルギー消費量等級 "1" | "2" | "3"
+    insulationGrade?: string;       // 断熱等性能等級 "1" | "2" | "3" | "4+"
+    orgName?: string;               // 発行機関名称
+    regNumber?: string;             // 登録番号
+    issueNumber?: string;           // 交付番号
+    issueDate?: string;             // 交付年月日 (YYYY-MM-DD)
   };
 
   // エネルギー使用の合理化（再度、似た項目）
   energyEfficiency2?: {
-    roomInsulation: boolean;        // 1 室の断熱性を高める工事
-    ceilingInsulation: boolean;     // 2 天井等の断熱性を高める工事
-    wallInsulation: boolean;        // 3 壁の断熱性を高める工事
-    floorInsulation: boolean;       // 4 床等の断熱性を高める工事
+    windowInsulation?: boolean;     // 1 窓の断熱性を高める工事
+    ceilingInsulation?: boolean;    // 2 天井等の断熱性を高める工事
+    wallInsulation?: boolean;       // 3 壁の断熱性を高める工事
+    floorInsulation?: boolean;      // 4 床等の断熱性を高める工事
 
-    region?: string;  // 地域区分 "1" - "8"
+    region1?: boolean;
+    region2?: boolean;
+    region3?: boolean;
+    region4?: boolean;
+    region5?: boolean;
+    region6?: boolean;
+    region7?: boolean;
+    region8?: boolean;
+
+    gradeBefore1?: boolean;
+    gradeBefore2?: boolean;
+    gradeBefore3?: boolean;
   };
 
   // 改修工事前の住宅の断熱等性能等級
-  insulationGradeBefore?: string;  // "3" | "4+"
+  insulationGradeBefore3?: boolean;
+  insulationGradeBefore4Plus?: boolean;
 
   // 長期優良住宅建築等計画の認定
   longTermCert?: {
-    certNumber: string;  // 認定番号
-    certDate: string;    // 認定年月日 (YYYY-MM-DD)
+    certAuthority?: string;  // 認定主体
+    certNumber?: string;     // 認定番号
+    certDate?: string;       // 認定年月日 (YYYY-MM-DD)
   };
 }
 
@@ -134,14 +163,14 @@ export const defaultWork1: Work1Type = {
 };
 
 export const defaultWork2: Work2Type = {
-  floorInsulation: false,
-  windowRenovation: false,
-  partitionInsulation: false,
-  boundaryRepair: false,
+  floorOverHalf: false,
+  stairOverHalf: false,
+  partitionOverHalf: false,
+  wallOverHalf: false,
 };
 
 export const defaultWork3: Work3Type = {
-  seismic: false,
+  livingRoom: false,
   kitchen: false,
   bathroom: false,
   toilet: false,
@@ -152,8 +181,8 @@ export const defaultWork3: Work3Type = {
 };
 
 export const defaultWork4: Work4Type = {
-  seismicOrder: false,
-  groundSafety: false,
+  buildingStandard: false,
+  earthquakeSafety: false,
 };
 
 export const defaultWork5: Work5Type = {
