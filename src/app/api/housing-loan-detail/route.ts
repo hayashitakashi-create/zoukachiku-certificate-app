@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       savedDetail = await prisma.housingLoanDetail.update({
         where: { certificateId },
         data: {
-          workTypes: workTypes as Prisma.JsonValue,
+          workTypes: workTypes as Prisma.InputJsonValue,
           workDescription: workDescription || null,
           totalCost,
           hasSubsidy,
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       savedDetail = await prisma.housingLoanDetail.create({
         data: {
           certificateId,
-          workTypes: workTypes as Prisma.JsonValue,
+          workTypes: workTypes as Prisma.InputJsonValue,
           workDescription: workDescription || null,
           totalCost,
           hasSubsidy,
