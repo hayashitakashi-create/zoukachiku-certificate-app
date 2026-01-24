@@ -371,7 +371,7 @@ export default function CertificateDetailPage({
             </p>
             {(() => {
               const calculation = calculateCertificateCost(
-                certificate.works,
+                certificate.works as any,
                 certificate.subsidyAmount
               );
               const breakdown = getWorkTypeBreakdown(calculation);
