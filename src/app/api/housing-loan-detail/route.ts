@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 // 住宅借入金等特別控除の詳細保存スキーマ
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       savedDetail = await prisma.housingLoanDetail.update({
         where: { certificateId },
         data: {
-          workTypes,
+          workTypes: workTypes as Prisma.JsonValue,
           workDescription: workDescription || null,
           totalCost,
           hasSubsidy,
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
       savedDetail = await prisma.housingLoanDetail.create({
         data: {
           certificateId,
-          workTypes,
+          workTypes: workTypes as Prisma.JsonValue,
           workDescription: workDescription || null,
           totalCost,
           hasSubsidy,
