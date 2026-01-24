@@ -1,6 +1,65 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+type Certificate = {
+  id: string;
+  applicantName: string;
+  propertyAddress: string;
+  issueDate: string | null;
+  status: string;
+  createdAt: string;
+};
+
 export default function HomePage() {
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // 証明書一覧を取得
+  useEffect(() => {
+    fetchCertificates();
+  }, [statusFilter]);
+
+  const fetchCertificates = async () => {
+    setLoading(true);
+    try {
+      const url = statusFilter === 'all'
+        ? '/api/certificates'
+        : `/api/certificates?status=${statusFilter}`;
+
+      const response = await fetch(url);
+      const result = await response.json();
+
+      if (result.success) {
+        setCertificates(result.data.certificates);
+      }
+    } catch (error) {
+      console.error('Failed to fetch certificates:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      draft: '下書き',
+      issued: '発行済み',
+      completed: '完了',
+    };
+    return labels[status] || status;
+  };
+
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      draft: 'bg-gray-100 text-gray-700',
+      issued: 'bg-green-100 text-green-700',
+      completed: 'bg-blue-100 text-blue-700',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-700';
+  };
+
   const menuItems = [
     {
       title: '耐震改修工事',
@@ -86,46 +145,146 @@ export default function HomePage() {
 
       {/* メインコンテンツ */}
       <div className="max-w-7xl mx-auto px-4 py-12">
-        {/* 概要セクション */}
-        <div className="mb-12 bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">
-            このツールについて
-          </h2>
-          <div className="space-y-3 text-gray-700">
-            <p>
-              増改築等工事証明書は、住宅の増改築等を行った場合に、所得税の特別控除や固定資産税の減額措置を受けるために必要な証明書です。
-            </p>
-            <p>
-              本ツールでは、各種改修工事の標準単価を用いて、控除対象額を自動計算します。
-            </p>
-            <div className="mt-4 p-4 bg-blue-50 rounded-md">
-              <p className="text-sm font-medium text-blue-900">
-                💡 使い方
-              </p>
-              <ol className="mt-2 text-sm text-blue-800 list-decimal list-inside space-y-1">
-                <li>実施する改修工事の種類を選択</li>
-                <li>工事内容と数量を入力</li>
-                <li>補助金額を入力（該当する場合）</li>
-                <li>「金額を計算」ボタンをクリック</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-
-        {/* 証明書作成ボタン */}
+        {/* 証明書一覧セクション */}
         <div className="mb-12">
-          <Link
-            href="/certificate/create"
-            className="block bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-105"
-          >
-            <div className="p-8 text-center">
-              <div className="text-5xl mb-4">📝</div>
-              <h2 className="text-2xl font-bold mb-2">増改築等工事証明書を作成する</h2>
-              <p className="text-blue-100">
-                複数の工事種別を統合して、正式な証明書を作成・PDF出力できます
-              </p>
-            </div>
-          </Link>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">証明書一覧</h2>
+            <Link
+              href="/certificate/create"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2"
+            >
+              <span>📝</span>
+              新規証明書を作成
+            </Link>
+          </div>
+
+          {/* ステータスフィルター */}
+          <div className="mb-6 flex gap-2">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-4 py-2 rounded-md transition-colors ${
+                statusFilter === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              すべて
+            </button>
+            <button
+              onClick={() => setStatusFilter('draft')}
+              className={`px-4 py-2 rounded-md transition-colors ${
+                statusFilter === 'draft'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              下書き
+            </button>
+            <button
+              onClick={() => setStatusFilter('issued')}
+              className={`px-4 py-2 rounded-md transition-colors ${
+                statusFilter === 'issued'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              発行済み
+            </button>
+          </div>
+
+          {/* 証明書リスト */}
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            {loading ? (
+              <div className="p-12 text-center text-gray-500">
+                読み込み中...
+              </div>
+            ) : certificates.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="text-6xl mb-4">📋</div>
+                <p className="text-gray-600 mb-4">
+                  {statusFilter === 'all'
+                    ? '証明書がまだありません'
+                    : `${getStatusLabel(statusFilter)}の証明書がありません`}
+                </p>
+                <Link
+                  href="/certificate/create"
+                  className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  最初の証明書を作成する
+                </Link>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      申請者名
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      物件所在地
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      発行日
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      ステータス
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      作成日
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      操作
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {certificates.map((cert) => (
+                    <tr key={cert.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {cert.applicantName}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">
+                          {cert.propertyAddress}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {cert.issueDate
+                            ? new Date(cert.issueDate).toLocaleDateString('ja-JP')
+                            : '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(
+                            cert.status
+                          )}`}
+                        >
+                          {getStatusLabel(cert.status)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">
+                          {new Date(cert.createdAt).toLocaleDateString('ja-JP')}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Link
+                          href={`/certificate/${cert.id}`}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          詳細
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
 
         {/* 工事種別一覧 */}

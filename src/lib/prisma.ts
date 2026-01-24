@@ -12,12 +12,11 @@ const createPrismaClient = () => {
     return {} as PrismaClient;
   }
 
-  // Create PostgreSQL connection pool
-  const connectionString = process.env.DATABASE_URL;
+  // Prisma 7 requires adapter for PostgreSQL connections
+  const connectionString = process.env.DATABASE_URL!;
   const pool = new Pool({ connectionString });
   const adapter = new PrismaPg(pool);
 
-  // Create Prisma Client with adapter
   return new PrismaClient({
     adapter,
     log: ['query', 'error', 'warn'],
@@ -26,4 +25,6 @@ const createPrismaClient = () => {
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}

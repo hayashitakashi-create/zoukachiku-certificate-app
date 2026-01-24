@@ -13,9 +13,13 @@ type WizardStep = 1 | 2 | 3 | 4;
 type CertificateFormData = {
   // ステップ1: 基本情報
   applicantName: string;
+  applicantPostalCode: string;
   applicantAddress: string;
+  applicantAddressDetail: string;
   propertyNumber: string;
+  propertyPostalCode: string;
   propertyAddress: string;
+  propertyAddressDetail: string;
   completionDate: string;
   purposeType: 'housing_loan' | 'reform_tax' | 'resale' | 'property_tax' | '';
 
@@ -53,9 +57,13 @@ export default function CertificateCreatePage() {
   // 初期値
   const initialFormData: CertificateFormData = {
     applicantName: '',
+    applicantPostalCode: '',
     applicantAddress: '',
+    applicantAddressDetail: '',
     propertyNumber: '',
+    propertyPostalCode: '',
     propertyAddress: '',
+    propertyAddressDetail: '',
     completionDate: '',
     purposeType: '',
     selectedWorkTypes: [],
@@ -71,6 +79,43 @@ export default function CertificateCreatePage() {
   };
 
   const [formData, setFormData] = useState<CertificateFormData>(initialFormData);
+  const [certificateId, setCertificateId] = useState<string | null>(null);
+
+  // 郵便番号から住所を検索する関数
+  const fetchAddressFromPostalCode = async (postalCode: string, fieldType: 'applicant' | 'property') => {
+    // ハイフンを除去して7桁の数字のみにする
+    const cleanedPostalCode = postalCode.replace(/-/g, '');
+
+    if (cleanedPostalCode.length !== 7 || !/^\d{7}$/.test(cleanedPostalCode)) {
+      return; // 7桁でない場合は何もしない
+    }
+
+    try {
+      const response = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${cleanedPostalCode}`);
+      const data = await response.json();
+
+      if (data.status === 200 && data.results && data.results.length > 0) {
+        const result = data.results[0];
+        // 都道府県 + 市区町村 + 町域
+        const address = `${result.address1}${result.address2}${result.address3}`;
+
+        // フィールドタイプに応じて適切な住所フィールドを更新
+        if (fieldType === 'applicant') {
+          setFormData(prev => ({
+            ...prev,
+            applicantAddress: address
+          }));
+        } else {
+          setFormData(prev => ({
+            ...prev,
+            propertyAddress: address
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('郵便番号検索エラー:', error);
+    }
+  };
 
   // ローカルストレージからフォームデータと証明者設定を読み込む（初回のみ）
   useEffect(() => {
@@ -193,8 +238,79 @@ export default function CertificateCreatePage() {
     setCurrentStep(step);
   }, []);
 
-  const nextStep = useCallback(() => {
+  const nextStep = useCallback(async () => {
     console.log('nextStep button clicked');
+
+    // ステップ1からステップ2に進む際、証明書を下書き保存
+    if (currentStep === 1) {
+      // 必須項目チェック
+      if (
+        !formData.applicantName ||
+        !formData.applicantAddress ||
+        !formData.propertyAddress ||
+        !formData.completionDate ||
+        !formData.purposeType
+      ) {
+        alert('基本情報の必須項目を入力してください');
+        return;
+      }
+
+      // 住所を結合（市区町村 + 番地・建物名）
+      const fullApplicantAddress = formData.applicantAddress + (formData.applicantAddressDetail || '');
+
+      // 既に証明書IDがある場合はスキップ
+      let savedCertificateId = certificateId;
+      if (!certificateId) {
+        try {
+          setIsSaving(true);
+          const response = await fetch('/api/certificates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              applicantName: formData.applicantName,
+              applicantAddress: fullApplicantAddress,
+              propertyNumber: formData.propertyNumber || undefined,
+              propertyAddress: formData.propertyAddress,
+              completionDate: formData.completionDate,
+              purposeType: formData.purposeType,
+              selectedWorkTypes: [],
+              subsidyAmount: 0,
+              status: 'draft',
+            }),
+          });
+
+          const result = await response.json();
+          if (result.success) {
+            savedCertificateId = result.data.id;
+            setCertificateId(result.data.id);
+            console.log('Certificate draft created with ID:', result.data.id);
+          } else {
+            alert(`エラー: ${result.error}`);
+            setIsSaving(false);
+            return;
+          }
+        } catch (error) {
+          console.error('Failed to create draft:', error);
+          alert('下書き保存中にエラーが発生しました');
+          setIsSaving(false);
+          return;
+        } finally {
+          setIsSaving(false);
+        }
+      }
+
+      // 住宅借入金等特別控除の場合、詳細入力ページに遷移
+      if (formData.purposeType === 'housing_loan') {
+        if (savedCertificateId) {
+          router.push(`/certificate/housing-loan-detail?certificateId=${savedCertificateId}`);
+          return;
+        } else {
+          alert('証明書IDの取得に失敗しました');
+          return;
+        }
+      }
+    }
+
     setCurrentStep((prev) => {
       console.log('Current step before transition:', prev);
       if (prev < 4) {
@@ -206,7 +322,7 @@ export default function CertificateCreatePage() {
         return prev;
       }
     });
-  }, []);
+  }, [currentStep, formData, certificateId, router]);
 
   const prevStep = useCallback(() => {
     console.log('prevStep clicked');
@@ -238,6 +354,9 @@ export default function CertificateCreatePage() {
   const saveCertificate = async (status: 'draft' | 'completed' | 'issued') => {
     setIsSaving(true);
     try {
+      // 住所を結合（市区町村 + 番地・建物名）
+      const fullApplicantAddress = formData.applicantAddress + (formData.applicantAddressDetail || '');
+
       // issuerInfoオブジェクトから旧形式のフィールドを抽出
       let issuerName = '';
       let issuerOfficeName = '';
@@ -279,7 +398,7 @@ export default function CertificateCreatePage() {
         },
         body: JSON.stringify({
           applicantName: formData.applicantName,
-          applicantAddress: formData.applicantAddress,
+          applicantAddress: fullApplicantAddress,
           propertyNumber: formData.propertyNumber || undefined,
           propertyAddress: formData.propertyAddress,
           completionDate: formData.completionDate,
@@ -347,6 +466,20 @@ export default function CertificateCreatePage() {
     ) {
       alert('必須項目を全て入力してください');
       return;
+    }
+
+    // 住宅借入金等特別控除の場合、工事費用が100万円以上かチェック
+    // TODO: 実際の工事データを取得して検証
+    // 現在は警告のみ表示
+    if (formData.purposeType === 'housing_loan') {
+      const confirmed = confirm(
+        '注意: 住宅借入金等特別控除を適用するには、補助金控除後の工事費用が100万円以上である必要があります。\n' +
+        '工事データを入力済みで、合計金額が要件を満たしていることを確認してください。\n\n' +
+        'このまま発行しますか？'
+      );
+      if (!confirmed) {
+        return;
+      }
     }
 
     await saveCertificate('issued');
@@ -470,7 +603,30 @@ export default function CertificateCreatePage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        住所 *
+                        郵便番号
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.applicantPostalCode}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setFormData({ ...formData, applicantPostalCode: value });
+                          // 7桁入力されたら住所を自動検索
+                          if (value.replace(/-/g, '').length === 7) {
+                            fetchAddressFromPostalCode(value, 'applicant');
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="1000001 または 100-0001"
+                        maxLength={8}
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        7桁入力すると市区町村まで自動入力されます
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        住所（市区町村まで） *
                       </label>
                       <input
                         type="text"
@@ -479,8 +635,28 @@ export default function CertificateCreatePage() {
                           setFormData({ ...formData, applicantAddress: e.target.value })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="東京都千代田区○○ 1-2-3"
+                        placeholder="東京都千代田区千代田"
                       />
+                      <p className="mt-1 text-xs text-gray-500">
+                        郵便番号を入力すると自動で入力されます
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        番地・建物名
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.applicantAddressDetail}
+                        onChange={(e) =>
+                          setFormData({ ...formData, applicantAddressDetail: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="1-2-3 〇〇ビル 4階"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        番地、建物名、部屋番号などを入力してください
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -489,7 +665,30 @@ export default function CertificateCreatePage() {
                 <div className="border-b pb-6">
                   <h3 className="text-lg font-semibold mb-4">家屋番号及び所在地</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        郵便番号
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.propertyPostalCode}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setFormData({ ...formData, propertyPostalCode: value });
+                          // 7桁入力されたら住所を自動検索
+                          if (value.replace(/-/g, '').length === 7) {
+                            fetchAddressFromPostalCode(value, 'property');
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="1000001 または 100-0001"
+                        maxLength={8}
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        7桁入力すると市区町村まで自動入力されます
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         所在地 *
                       </label>
@@ -500,10 +699,13 @@ export default function CertificateCreatePage() {
                           setFormData({ ...formData, propertyAddress: e.target.value })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="東京都千代田区○○ 1-2-3"
+                        placeholder="東京都千代田区千代田 1-2-3"
                       />
+                      <p className="mt-1 text-xs text-gray-500">
+                        郵便番号で自動入力された後、番地等を追記してください
+                      </p>
                     </div>
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         家屋番号
                       </label>
@@ -707,7 +909,7 @@ export default function CertificateCreatePage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {formData.selectedWorkTypes.includes('seismic') && (
                       <Link
-                        href="/seismic-reform"
+                        href={certificateId ? `/seismic-reform?certificateId=${certificateId}` : "/seismic-reform"}
                         target="_blank"
                         className="p-4 border-2 border-blue-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors"
                       >
@@ -716,13 +918,16 @@ export default function CertificateCreatePage() {
                             <p className="font-medium">🏗️ 耐震改修工事</p>
                             <p className="text-sm text-gray-600">別画面で入力 →</p>
                           </div>
+                          {certificateId && (
+                            <span className="text-xs text-green-600 font-semibold">✓ 証明書連携</span>
+                          )}
                         </div>
                       </Link>
                     )}
 
                     {formData.selectedWorkTypes.includes('barrierFree') && (
                       <Link
-                        href="/barrier-free-reform"
+                        href={certificateId ? `/barrier-free-reform?certificateId=${certificateId}` : "/barrier-free-reform"}
                         target="_blank"
                         className="p-4 border-2 border-green-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors"
                       >
@@ -731,13 +936,16 @@ export default function CertificateCreatePage() {
                             <p className="font-medium">♿ バリアフリー改修工事</p>
                             <p className="text-sm text-gray-600">別画面で入力 →</p>
                           </div>
+                          {certificateId && (
+                            <span className="text-xs text-green-600 font-semibold">✓ 証明書連携</span>
+                          )}
                         </div>
                       </Link>
                     )}
 
                     {formData.selectedWorkTypes.includes('energySaving') && (
                       <Link
-                        href="/energy-saving-reform"
+                        href={certificateId ? `/energy-saving-reform?certificateId=${certificateId}` : "/energy-saving-reform"}
                         target="_blank"
                         className="p-4 border-2 border-orange-200 rounded-lg hover:border-orange-400 hover:bg-orange-50 transition-colors"
                       >
@@ -746,13 +954,16 @@ export default function CertificateCreatePage() {
                             <p className="font-medium">☀️ 省エネ改修工事</p>
                             <p className="text-sm text-gray-600">別画面で入力 →</p>
                           </div>
+                          {certificateId && (
+                            <span className="text-xs text-green-600 font-semibold">✓ 証明書連携</span>
+                          )}
                         </div>
                       </Link>
                     )}
 
                     {formData.selectedWorkTypes.includes('cohabitation') && (
                       <Link
-                        href="/cohabitation-reform"
+                        href={certificateId ? `/cohabitation-reform?certificateId=${certificateId}` : "/cohabitation-reform"}
                         target="_blank"
                         className="p-4 border-2 border-purple-200 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors"
                       >
@@ -761,13 +972,16 @@ export default function CertificateCreatePage() {
                             <p className="font-medium">👨‍👩‍👧‍👦 同居対応改修工事</p>
                             <p className="text-sm text-gray-600">別画面で入力 →</p>
                           </div>
+                          {certificateId && (
+                            <span className="text-xs text-green-600 font-semibold">✓ 証明書連携</span>
+                          )}
                         </div>
                       </Link>
                     )}
 
                     {formData.selectedWorkTypes.includes('childcare') && (
                       <Link
-                        href="/childcare-reform"
+                        href={certificateId ? `/childcare-reform?certificateId=${certificateId}` : "/childcare-reform"}
                         target="_blank"
                         className="p-4 border-2 border-teal-200 rounded-lg hover:border-teal-400 hover:bg-teal-50 transition-colors"
                       >
@@ -776,13 +990,16 @@ export default function CertificateCreatePage() {
                             <p className="font-medium">👶 子育て対応改修工事</p>
                             <p className="text-sm text-gray-600">別画面で入力 →</p>
                           </div>
+                          {certificateId && (
+                            <span className="text-xs text-green-600 font-semibold">✓ 証明書連携</span>
+                          )}
                         </div>
                       </Link>
                     )}
 
                     {formData.selectedWorkTypes.includes('otherRenovation') && (
                       <Link
-                        href="/other-renovation"
+                        href={certificateId ? `/other-renovation?certificateId=${certificateId}` : "/other-renovation"}
                         target="_blank"
                         className="p-4 border-2 border-indigo-200 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 transition-colors"
                       >
@@ -791,13 +1008,16 @@ export default function CertificateCreatePage() {
                             <p className="font-medium">🔨 その他増改築等工事</p>
                             <p className="text-sm text-gray-600">別画面で入力 →</p>
                           </div>
+                          {certificateId && (
+                            <span className="text-xs text-green-600 font-semibold">✓ 証明書連携</span>
+                          )}
                         </div>
                       </Link>
                     )}
 
                     {formData.selectedWorkTypes.includes('longTermHousing') && (
                       <Link
-                        href="/long-term-housing"
+                        href={certificateId ? `/long-term-housing?certificateId=${certificateId}` : "/long-term-housing"}
                         target="_blank"
                         className="p-4 border-2 border-rose-200 rounded-lg hover:border-rose-400 hover:bg-rose-50 transition-colors"
                       >
@@ -806,6 +1026,9 @@ export default function CertificateCreatePage() {
                             <p className="font-medium">⭐ 長期優良住宅化改修工事</p>
                             <p className="text-sm text-gray-600">別画面で入力 →</p>
                           </div>
+                          {certificateId && (
+                            <span className="text-xs text-green-600 font-semibold">✓ 証明書連携</span>
+                          )}
                         </div>
                       </Link>
                     )}
@@ -947,7 +1170,7 @@ export default function CertificateCreatePage() {
                     <div>
                       <p className="text-gray-600">申請者住所</p>
                       <p className="font-medium">
-                        {formData.applicantAddress || '（未入力）'}
+                        {(formData.applicantAddress + (formData.applicantAddressDetail || '')) || '（未入力）'}
                       </p>
                     </div>
                     <div>

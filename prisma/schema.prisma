@@ -44,6 +44,7 @@ model Certificate {
   childcareWorks ChildcareWork[]
   otherRenovationWorks OtherRenovationWork[]
   longTermHousingWorks LongTermHousingWork[]
+  housingLoanDetail HousingLoanDetail?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -315,6 +316,32 @@ model LongTermHousingSummary {
   subsidyAmount Decimal @db.Decimal(12, 2) @default(0) // 補助金額
   deductibleAmount Decimal @db.Decimal(12, 2) // 控除対象額
   isExcellentHousing Boolean @default(false) // 長期優良住宅認定取得か（上限500万円か250万円か）
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([certificateId])
+}
+
+// 住宅借入金等特別控除の詳細情報
+// スクリーンショットに基づく第1号〜第6号工事の選択と費用情報を保存
+model HousingLoanDetail {
+  id            String   @id @default(uuid())
+  certificateId String   @unique
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  // (1) 実施した工事の種別（JSON形式で保存）
+  // 構造: { work1: {...}, work2: {...}, ..., work6: {...} }
+  workTypes     Json
+
+  // (2) 実施した工事の内容
+  workDescription String?  @db.Text
+
+  // (3) 実施した工事の費用の概要
+  totalCost       Decimal  @db.Decimal(12, 2) @default(0) // ① 第1号〜6号工事に要した費用の額
+  hasSubsidy      Boolean  @default(false)                 // ② 補助金等の交付の有無
+  subsidyAmount   Decimal  @db.Decimal(12, 2) @default(0) // ②（有の場合）交付される補助金等の額
+  deductibleAmount Decimal @db.Decimal(12, 2) @default(0) // ③ ①から②を差し引いた額（100万円以上必要）
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

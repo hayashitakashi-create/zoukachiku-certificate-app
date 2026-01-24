@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 /**
- * 証明書作成・更新リクエストスキーマ
+ * 基本スキーマ（refinement適用前）
  */
-export const createCertificateRequestSchema = z.object({
+const baseCertificateSchema = z.object({
   // 基本情報
   applicantName: z.string().min(1, '申請者氏名は必須です'),
   applicantAddress: z.string().min(1, '申請者住所は必須です'),
@@ -20,23 +20,46 @@ export const createCertificateRequestSchema = z.object({
   // 補助金額
   subsidyAmount: z.number().min(0).default(0),
 
-  // 証明者情報
-  issuerName: z.string().min(1, '証明者氏名は必須です'),
-  issuerOfficeName: z.string().min(1, '所属事務所名は必須です'),
-  issuerOrganizationType: z.string().min(1, '組織種別は必須です'),
+  // 証明者情報（draft時は任意、issued時は必須）
+  issuerName: z.string().optional(),
+  issuerOfficeName: z.string().optional(),
+  issuerOrganizationType: z.string().optional(),
   issuerQualificationNumber: z.string().optional(),
-  issueDate: z.string().min(1, '発行日は必須です'),
+  issueDate: z.string().optional(),
 
   // ステータス
   status: z.enum(['draft', 'completed', 'issued']).default('draft'),
 });
 
+/**
+ * 証明書作成リクエストスキーマ（refinement適用）
+ */
+export const createCertificateRequestSchema = baseCertificateSchema.refine((data) => {
+  // issued または completed の場合は証明者情報が必須
+  if (data.status === 'issued' || data.status === 'completed') {
+    return (
+      data.issuerName &&
+      data.issuerName.length > 0 &&
+      data.issuerOfficeName &&
+      data.issuerOfficeName.length > 0 &&
+      data.issuerOrganizationType &&
+      data.issuerOrganizationType.length > 0 &&
+      data.issueDate &&
+      data.issueDate.length > 0
+    );
+  }
+  return true;
+}, {
+  message: '証明書を発行する場合は証明者情報と発行日が必須です',
+  path: ['issuerName'],
+});
+
 export type CreateCertificateRequest = z.infer<typeof createCertificateRequestSchema>;
 
 /**
- * 証明書更新リクエストスキーマ
+ * 証明書更新リクエストスキーマ（全フィールドオプショナル）
  */
-export const updateCertificateRequestSchema = createCertificateRequestSchema.partial();
+export const updateCertificateRequestSchema = baseCertificateSchema.partial();
 
 export type UpdateCertificateRequest = z.infer<typeof updateCertificateRequestSchema>;
 

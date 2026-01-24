@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { SEISMIC_WORK_TYPES } from '@/lib/seismic-work-types';
 import type { SeismicCalculationResult } from '@/app/api/seismic-works/types';
 
@@ -23,8 +24,16 @@ const seismicFormSchema = z.object({
 type SeismicFormData = z.infer<typeof seismicFormSchema>;
 
 export default function SeismicReformPage() {
+  const searchParams = useSearchParams();
+  const certificateId = searchParams.get('certificateId');
+
   const [calculationResult, setCalculationResult] = useState<SeismicCalculationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [certificateInfo, setCertificateInfo] = useState<{
+    applicantName: string;
+    propertyAddress: string;
+  } | null>(null);
 
   const {
     register,
@@ -44,6 +53,25 @@ export default function SeismicReformPage() {
     control,
     name: 'works',
   });
+
+  // 証明書情報を取得
+  useEffect(() => {
+    if (certificateId) {
+      fetch(`/api/certificates/${certificateId}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.success) {
+            setCertificateInfo({
+              applicantName: result.data.applicantName,
+              propertyAddress: result.data.propertyAddress,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch certificate:', error);
+        });
+    }
+  }, [certificateId]);
 
   const onSubmit = async (data: SeismicFormData) => {
     setIsCalculating(true);
@@ -71,6 +99,47 @@ export default function SeismicReformPage() {
     }
   };
 
+  const handleSaveWork = async () => {
+    if (!certificateId) {
+      alert('証明書IDが指定されていません');
+      return;
+    }
+
+    if (!calculationResult) {
+      alert('まず計算を実行してください');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/seismic-works', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          certificateId,
+          works: calculationResult.works,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('工事データを保存しました');
+        // 証明書詳細ページへリダイレクト
+        window.location.href = `/certificate/${certificateId}`;
+      } else {
+        alert('保存エラー: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Save error:', error);
+      alert('保存中にエラーが発生しました');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-5xl mx-auto px-4">
@@ -79,12 +148,33 @@ export default function SeismicReformPage() {
             耐震改修工事 計算ツール
           </h1>
           <Link
-            href="/certificate/create?step=3"
+            href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=3'}
             className="text-blue-600 hover:text-blue-800 flex items-center gap-2"
           >
-            ← 証明者情報入力へ
+            ← {certificateId ? '証明書詳細へ戻る' : '証明者情報入力へ'}
           </Link>
         </div>
+
+        {/* 証明書情報表示 */}
+        {certificateId && certificateInfo && (
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-blue-900 mb-2">📋 証明書情報</h2>
+            <div className="text-sm text-blue-800 space-y-1">
+              <p><strong>申請者:</strong> {certificateInfo.applicantName}</p>
+              <p><strong>物件所在地:</strong> {certificateInfo.propertyAddress}</p>
+              <p><strong>証明書ID:</strong> {certificateId}</p>
+            </div>
+          </div>
+        )}
+
+        {/* certificateIdがない場合の警告 */}
+        {!certificateId && (
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-800">
+              ⚠️ 証明書IDが指定されていません。証明書作成フローから開始してください。
+            </p>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
@@ -306,17 +396,34 @@ export default function SeismicReformPage() {
               )}
             </div>
 
-            {/* 証明者情報入力へ進むボタン */}
-            <div className="mt-6 pt-6 border-t">
-              <Link
-                href="/certificate/create?step=3"
-                className="block w-full bg-blue-600 text-white text-center py-3 px-6 rounded-md hover:bg-blue-700 font-medium transition-colors"
-              >
-                次へ：証明者情報入力 →
-              </Link>
-              <p className="text-sm text-gray-600 text-center mt-2">
-                計算結果を確認したら、証明者情報の入力に進んでください
-              </p>
+            {/* 保存・次へ進むボタン */}
+            <div className="mt-6 pt-6 border-t space-y-3">
+              {certificateId ? (
+                <>
+                  <button
+                    onClick={handleSaveWork}
+                    disabled={isSaving}
+                    className="w-full bg-green-600 text-white py-3 px-6 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
+                  >
+                    {isSaving ? '保存中...' : '✓ 工事データを証明書に保存'}
+                  </button>
+                  <p className="text-sm text-gray-600 text-center">
+                    保存すると証明書に工事データが紐付けられます
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/certificate/create?step=3"
+                    className="block w-full bg-blue-600 text-white text-center py-3 px-6 rounded-md hover:bg-blue-700 font-medium transition-colors"
+                  >
+                    次へ：証明者情報入力 →
+                  </Link>
+                  <p className="text-sm text-gray-600 text-center">
+                    計算結果を確認したら、証明者情報の入力に進んでください
+                  </p>
+                </>
+              )}
             </div>
           </div>
         )}
