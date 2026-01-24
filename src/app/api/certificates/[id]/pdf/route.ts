@@ -54,7 +54,7 @@ export async function GET(
     const fileName = `certificate_housing-loan_${id}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
     // PDFレスポンスを返す
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

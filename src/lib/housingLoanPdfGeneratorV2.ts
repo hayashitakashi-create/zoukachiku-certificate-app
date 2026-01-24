@@ -17,9 +17,9 @@ interface CertificateData {
   completionDate: string;
   purposeType: string;
   subsidyAmount: number;
-  issuerName: string;
-  issuerOfficeName: string;
-  issuerOrganizationType: string;
+  issuerName: string | null;
+  issuerOfficeName: string | null;
+  issuerOrganizationType: string | null;
   issuerQualificationNumber: string | null;
   issueDate: string | null;
   status: string;
@@ -291,22 +291,26 @@ export async function generateHousingLoanPDF(
     }
 
     // 建築士事務所名
-    lastPage.drawText(certificate.issuerOfficeName, {
-      x: 150,
-      y: height - 180,
-      size: 9,
-      font: font,
-      color: rgb(0, 0, 0),
-    });
+    if (certificate.issuerOfficeName) {
+      lastPage.drawText(certificate.issuerOfficeName, {
+        x: 150,
+        y: height - 180,
+        size: 9,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+    }
 
     // 建築士氏名
-    lastPage.drawText(certificate.issuerName, {
-      x: 150,
-      y: height - 220,
-      size: 9,
-      font: font,
-      color: rgb(0, 0, 0),
-    });
+    if (certificate.issuerName) {
+      lastPage.drawText(certificate.issuerName, {
+        x: 150,
+        y: height - 220,
+        size: 9,
+        font: font,
+        color: rgb(0, 0, 0),
+      });
+    }
 
     // 登録番号
     if (certificate.issuerQualificationNumber) {
