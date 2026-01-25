@@ -44,12 +44,20 @@ export async function generateHousingLoanPDF(
 ): Promise<Buffer> {
   try {
     // 公式テンプレートPDFを読み込み
+    const publicDir = path.join(process.cwd(), 'public');
+
     const templatePath = path.join(
-      process.cwd(),
-      'public',
+      publicDir,
       'templates',
       'housing-loan-certificate-template.pdf'
     );
+
+    console.log('Loading PDF template from:', templatePath);
+    console.log('File exists:', fs.existsSync(templatePath));
+
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template PDF not found at: ${templatePath}`);
+    }
 
     const templateBytes = fs.readFileSync(templatePath);
     const pdfDoc = await PDFDocument.load(templateBytes);
@@ -58,10 +66,20 @@ export async function generateHousingLoanPDF(
     pdfDoc.registerFontkit(fontkit);
 
     // 日本語フォント読み込み
-    const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansJP.ttf');
+    const fontPath = path.join(publicDir, 'fonts', 'NotoSansJP.ttf');
+
+    console.log('Loading font from:', fontPath);
+    console.log('Font file exists:', fs.existsSync(fontPath));
+
+    if (!fs.existsSync(fontPath)) {
+      throw new Error(`Font file not found at: ${fontPath}`);
+    }
+
     const fontBytes = fs.readFileSync(fontPath);
     const font = await pdfDoc.embedFont(fontBytes);
     const boldFont = font; // 同じフォントを使用（太字は後で対応可能）
+
+    console.log('Font embedded successfully');
 
     // ページ取得
     const pages = pdfDoc.getPages();
