@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { EnergySavingCalculationResult } from '@/app/api/energy-saving-works/types';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { ENERGY_SAVING_WORK_TYPES, getEnergySavingWorkTypesByCategory, hasSolarPowerWork } from '@/lib/energy-saving-work-types';
 
 // フォームのスキーマ
 const energySavingFormSchema = z.object({
@@ -21,25 +23,17 @@ const energySavingFormSchema = z.object({
 
 type EnergySavingFormData = z.infer<typeof energySavingFormSchema>;
 
-// カテゴリ別の工事種別データ型
-type WorkTypesByCategory = {
-  category: string;
-  works: Array<{
-    code: string;
-    name: string;
-    unitPrice: number;
-    unit: string;
-    regionCode?: string;
-    needsWindowRatio?: boolean;
-    description: string;
-  }>;
-};
+function EnergySavingReformContent() {
+  const searchParams = useSearchParams();
+  const certificateId = searchParams.get('certificateId');
 
-export default function EnergySavingReformPage() {
-  const [calculationResult, setCalculationResult] = useState<EnergySavingCalculationResult | null>(null);
+  const [calculationResult, setCalculationResult] = useState<any | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [workTypesByCategory, setWorkTypesByCategory] = useState<WorkTypesByCategory[]>([]);
-  const [allWorkTypes, setAllWorkTypes] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [certificateInfo, setCertificateInfo] = useState<{
+    applicantName: string;
+    propertyAddress: string;
+  } | null>(null);
 
   const {
     register,
@@ -60,51 +54,127 @@ export default function EnergySavingReformPage() {
     name: 'works',
   });
 
-  // 工事種別データを取得
+  // 証明書情報を取得
   useEffect(() => {
-    fetch('/api/energy-saving-works/work-types')
-      .then((res) => res.json())
-      .then((result) => {
-        if (result.success) {
-          setAllWorkTypes(result.data.all);
-          setWorkTypesByCategory(result.data.byCategory);
-        }
-      })
-      .catch((error) => console.error('Error fetching work types:', error));
-  }, []);
+    if (certificateId) {
+      fetch(`/api/certificates/${certificateId}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.success) {
+            setCertificateInfo({
+              applicantName: result.data.applicantName,
+              propertyAddress: result.data.propertyAddress,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch certificate:', error);
+        });
+    }
+  }, [certificateId]);
 
   const onSubmit = async (data: EnergySavingFormData) => {
+    if (!certificateId) {
+      alert('証明書IDが指定されていません');
+      return;
+    }
+
     setIsCalculating(true);
+    setIsSaving(true);
     try {
-      const response = await fetch('/api/energy-saving-works/calculate', {
+      // 太陽光発電工事が含まれているかチェック
+      const workCodes = data.works.map(w => w.workTypeCode);
+      const hasSolarPanel = hasSolarPowerWork(workCodes);
+
+      // 新しいAPI構造: 直接証明書に紐付けて保存
+      const worksData = data.works.map((work) => {
+        const workType = ENERGY_SAVING_WORK_TYPES.find((wt) => wt.code === work.workTypeCode);
+        return {
+          workTypeCode: work.workTypeCode,
+          workName: workType?.name || '',
+          category: workType?.category || '',
+          regionCode: workType?.regionCode || null,
+          unitPrice: workType?.unitPrice || 0,
+          unit: workType?.unit || '',
+          quantity: work.quantity,
+          windowRatio: work.windowRatio,
+          residentRatio: work.residentRatio,
+        };
+      });
+
+      const response = await fetch(`/api/certificates/${certificateId}/energy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          works: worksData,
+          subsidyAmount: data.subsidyAmount,
+          hasSolarPanel,
+        }),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        setCalculationResult(result.data);
+        setCalculationResult(result.data.calculation);
+        alert('工事データを保存しました');
+        // 証明書詳細ページへリダイレクト
+        window.location.href = `/certificate/${certificateId}`;
       } else {
-        alert('計算エラー: ' + result.error);
+        alert('保存エラー: ' + result.error);
       }
     } catch (error) {
-      console.error('Calculation error:', error);
-      alert('計算中にエラーが発生しました');
+      console.error('Save error:', error);
+      alert('保存中にエラーが発生しました');
     } finally {
       setIsCalculating(false);
+      setIsSaving(false);
     }
   };
+
+  // カテゴリ別の工事種別を取得
+  const categoryMap = getEnergySavingWorkTypesByCategory();
+  const workTypesByCategory = Array.from(categoryMap.entries()).map(([category, works]) => ({
+    category,
+    works,
+  }));
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-5xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          省エネ改修工事 計算ツール
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            省エネ改修工事 計算ツール
+          </h1>
+          <Link
+            href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=3'}
+            className="text-orange-600 hover:text-orange-800 flex items-center gap-2"
+          >
+            ← {certificateId ? '証明書詳細へ戻る' : '証明者情報入力へ'}
+          </Link>
+        </div>
+
+        {/* 証明書情報表示 */}
+        {certificateId && certificateInfo && (
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-orange-900 mb-2">📋 証明書情報</h2>
+            <div className="text-sm text-orange-800 space-y-1">
+              <p><strong>申請者:</strong> {certificateInfo.applicantName}</p>
+              <p><strong>物件所在地:</strong> {certificateInfo.propertyAddress}</p>
+              <p><strong>証明書ID:</strong> {certificateId}</p>
+            </div>
+          </div>
+        )}
+
+        {/* certificateIdがない場合の警告 */}
+        {!certificateId && (
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-800">
+              ⚠️ 証明書IDが指定されていません。証明書作成フローから開始してください。
+            </p>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
@@ -114,7 +184,7 @@ export default function EnergySavingReformPage() {
             <div className="space-y-6">
               {fields.map((field, index) => {
                 const selectedWorkCode = watch(`works.${index}.workTypeCode`);
-                const selectedWork = allWorkTypes.find((wt) => wt.code === selectedWorkCode);
+                const selectedWork = ENERGY_SAVING_WORK_TYPES.find((wt) => wt.code === selectedWorkCode);
 
                 return (
                   <div
@@ -282,104 +352,30 @@ export default function EnergySavingReformPage() {
               )}
             </div>
 
-            {/* 計算ボタン */}
+            {/* 保存ボタン */}
             <div className="mt-6">
               <button
                 type="submit"
-                disabled={isCalculating}
+                disabled={isCalculating || isSaving}
                 className="w-full bg-orange-600 text-white py-3 px-6 rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
               >
-                {isCalculating ? '計算中...' : '金額を計算'}
+                {isCalculating || isSaving ? '保存中...' : '✓ 工事データを証明書に保存'}
               </button>
+              <p className="text-sm text-gray-600 text-center mt-2">
+                保存すると証明書に工事データが紐付けられます
+              </p>
             </div>
           </form>
         </div>
-
-        {/* 計算結果表示 */}
-        {calculationResult && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">計算結果</h2>
-
-            {/* 各工事の明細（カテゴリ別） */}
-            <div className="mb-6">
-              <h3 className="font-medium mb-3">工事明細</h3>
-              <div className="space-y-2">
-                {calculationResult.works.map((work, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded"
-                  >
-                    <div>
-                      <p className="font-medium">{work.workName}</p>
-                      <p className="text-sm text-gray-600">
-                        [{work.category}
-                        {work.regionCode && ` - ${work.regionCode}地域`}
-                        ] {work.unitPrice.toLocaleString()}円 × {work.quantity}{work.unit}
-                        {work.windowRatio && ` × ${work.windowRatio}% (窓面積割合)`}
-                        {work.residentRatio && ` × ${work.residentRatio}% (居住用割合)`}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-lg">
-                        {work.calculatedAmount.toLocaleString()}円
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 合計・控除対象額 */}
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between text-lg">
-                <span>合計金額:</span>
-                <span className="font-semibold">
-                  {calculationResult.totalAmount.toLocaleString()}円
-                </span>
-              </div>
-
-              {calculationResult.subsidyAmount > 0 && (
-                <div className="flex justify-between">
-                  <span>補助金額:</span>
-                  <span className="text-red-600">
-                    - {calculationResult.subsidyAmount.toLocaleString()}円
-                  </span>
-                </div>
-              )}
-
-              <div className="flex justify-between text-xl font-bold text-orange-600 pt-2 border-t">
-                <span>控除対象額:</span>
-                <span>{calculationResult.deductibleAmount.toLocaleString()}円</span>
-              </div>
-
-              {/* 太陽光発電併設の表示 */}
-              {calculationResult.hasSolarPower && (
-                <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded">
-                  <p className="text-sm text-orange-800">
-                    ☀️ 太陽光発電設備の併設工事が含まれています（控除対象額の上限: 350万円）
-                  </p>
-                </div>
-              )}
-
-              {!calculationResult.hasSolarPower && calculationResult.deductibleAmount >= 2500000 && (
-                <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded">
-                  <p className="text-sm text-orange-800">
-                    ℹ️ 省エネ改修の控除対象額は最大250万円です（太陽光発電併設の場合は350万円）
-                  </p>
-                </div>
-              )}
-
-              {!calculationResult.isEligible && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ 控除対象額が50万円以下のため、減税対象外です
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
+  );
+}
+
+export default function EnergySavingReformPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+      <EnergySavingReformContent />
+    </Suspense>
   );
 }

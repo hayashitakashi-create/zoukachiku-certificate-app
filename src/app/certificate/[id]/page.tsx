@@ -3,16 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { generateCertificatePDF } from '@/lib/pdfGenerator';
-import { calculateCertificateCost, getWorkTypeBreakdown } from '@/lib/certificateCostCalculator';
-
-type WorkItem = {
-  id: string;
-  workType: string;
-  quantity: number;
-  unitPrice: number;
-  totalAmount: number;
-};
 
 type Certificate = {
   id: string;
@@ -31,14 +21,38 @@ type Certificate = {
   status: string;
   createdAt: string;
   updatedAt: string;
-  works?: {
-    seismic: WorkItem[];
-    barrierFree: WorkItem[];
-    energySaving: WorkItem[];
-    cohabitation: WorkItem[];
-    childcare: WorkItem[];
-    otherRenovation: WorkItem[];
-    longTermHousing: WorkItem[];
+};
+
+type RenovationSummary = {
+  id: string;
+  totalAmount: number;
+  subsidyAmount: number;
+  deductibleAmount: number;
+  workCount: number;
+};
+
+type CombinedCalculation = {
+  renovations: {
+    seismic?: any;
+    barrierFree?: any;
+    energy?: any;
+    cohabitation?: any;
+    childcare?: any;
+    other?: any;
+  };
+  combined: {
+    totalDeductible: number;
+    maxControlAmount: number;
+    excessAmount: number;
+    finalDeductible: number;
+    remaining: number;
+  };
+  summary: {
+    hasRenovations: boolean;
+    renovationTypes: string[];
+    totalWorkCost: number;
+    maxTaxDeduction: number;
+    remainingLimit: number;
   };
 };
 
@@ -49,6 +63,7 @@ export default function CertificateDetailPage({
 }) {
   const router = useRouter();
   const [certificate, setCertificate] = useState<Certificate | null>(null);
+  const [combinedCalculation, setCombinedCalculation] = useState<CombinedCalculation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -65,25 +80,35 @@ export default function CertificateDetailPage({
 
   useEffect(() => {
     if (certificateId) {
-      fetchCertificate();
+      fetchCertificateData();
     }
   }, [certificateId]);
 
-  const fetchCertificate = async () => {
+  const fetchCertificateData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/certificates/${certificateId}`);
-      const result = await response.json();
+      // 証明書基本情報と統合計算結果を並行取得
+      const [certResponse, calcResponse] = await Promise.all([
+        fetch(`/api/certificates/${certificateId}`),
+        fetch(`/api/certificates/${certificateId}/calculate-combined`),
+      ]);
 
-      if (result.success) {
-        setCertificate(result.data);
+      const certResult = await certResponse.json();
+      const calcResult = await calcResponse.json();
+
+      if (certResult.success) {
+        setCertificate(certResult.data);
       } else {
-        setError(result.error || '証明書の取得に失敗しました');
+        setError(certResult.error || '証明書の取得に失敗しました');
+      }
+
+      if (calcResult.success) {
+        setCombinedCalculation(calcResult.data);
       }
     } catch (err) {
-      console.error('Failed to fetch certificate:', err);
-      setError('証明書の取得中にエラーが発生しました');
+      console.error('Failed to fetch certificate data:', err);
+      setError('データの取得中にエラーが発生しました');
     } finally {
       setLoading(false);
     }
@@ -108,6 +133,29 @@ export default function CertificateDetailPage({
     } finally {
       setDeleting(false);
       setShowDeleteModal(false);
+    }
+  };
+
+  const handleDeleteRenovation = async (renovationType: string) => {
+    if (!confirm(`${getRenovationLabel(renovationType)}のデータを削除しますか？`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/certificates/${certificateId}/${renovationType}`, {
+        method: 'DELETE',
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        alert('削除しました');
+        fetchCertificateData(); // データを再取得
+      } else {
+        alert('削除に失敗しました: ' + result.error);
+      }
+    } catch (err) {
+      console.error('Failed to delete renovation:', err);
+      alert('削除中にエラーが発生しました');
     }
   };
 
@@ -139,36 +187,52 @@ export default function CertificateDetailPage({
     return labels[purposeType] || purposeType;
   };
 
-  const getWorkTypeLabel = (key: string) => {
+  const getRenovationLabel = (key: string) => {
     const labels: Record<string, string> = {
       seismic: '耐震改修工事',
       barrierFree: 'バリアフリー改修工事',
-      energySaving: '省エネ改修工事',
+      energy: '省エネ改修工事',
       cohabitation: '同居対応改修工事',
       childcare: '子育て対応改修工事',
-      otherRenovation: 'その他増改築等工事',
-      longTermHousing: '長期優良住宅化改修工事',
+      other: 'その他増改築等工事',
     };
     return labels[key] || key;
   };
 
-  const calculateWorkTotal = (works: WorkItem[]) => {
-    return works.reduce((sum, work) => sum + work.totalAmount, 0);
+  const getRenovationColor = (key: string) => {
+    const colors: Record<string, string> = {
+      seismic: 'blue',
+      barrierFree: 'green',
+      energy: 'orange',
+      cohabitation: 'purple',
+      childcare: 'pink',
+      other: 'indigo',
+    };
+    return colors[key] || 'gray';
   };
 
-  const calculateGrandTotal = () => {
-    if (!certificate?.works) return 0;
-    let total = 0;
-    Object.values(certificate.works).forEach((workArray) => {
-      total += calculateWorkTotal(workArray);
-    });
-    return total;
+  const getRenovationIcon = (key: string) => {
+    const icons: Record<string, string> = {
+      seismic: '🏗️',
+      barrierFree: '♿',
+      energy: '🌱',
+      cohabitation: '👨‍👩‍👧‍👦',
+      childcare: '👶',
+      other: '🔨',
+    };
+    return icons[key] || '📋';
   };
 
-  const calculateDeductibleAmount = () => {
-    const grandTotal = calculateGrandTotal();
-    const subsidyAmount = certificate?.subsidyAmount || 0;
-    return Math.max(0, grandTotal - subsidyAmount);
+  const getRenovationPath = (key: string) => {
+    const paths: Record<string, string> = {
+      seismic: 'seismic-reform',
+      barrierFree: 'barrier-free-reform',
+      energy: 'energy-saving-reform',
+      cohabitation: 'cohabitation-reform',
+      childcare: 'childcare-reform',
+      other: 'other-renovation',
+    };
+    return paths[key] || '';
   };
 
   if (loading) {
@@ -240,45 +304,6 @@ export default function CertificateDetailPage({
             </span>
           </div>
           <div className="flex gap-3">
-            {/* 編集ボタン - 住宅借入金等特別控除の場合は専用編集ページへ */}
-            {certificate.purposeType === 'housing_loan' ? (
-              <Link
-                href={`/certificate/housing-loan-detail?certificateId=${certificate.id}`}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                ✏️ 編集
-              </Link>
-            ) : (
-              <button
-                onClick={() => {
-                  alert('この証明書タイプの編集機能は準備中です');
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                ✏️ 編集
-              </button>
-            )}
-
-            <button
-              onClick={async () => {
-                if (certificate) {
-                  try {
-                    // Use API endpoint for housing_loan purpose type PDF download
-                    if (certificate.purposeType === 'housing_loan') {
-                      window.location.href = `/api/certificates/${certificate.id}/pdf`;
-                    } else {
-                      generateCertificatePDF(certificate as any);
-                    }
-                  } catch (error) {
-                    console.error('PDF download error:', error);
-                    alert('PDFのダウンロードに失敗しました');
-                  }
-                }
-              }}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
-            >
-              📄 PDFダウンロード
-            </button>
             <button
               onClick={() => setShowDeleteModal(true)}
               className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
@@ -380,199 +405,194 @@ export default function CertificateDetailPage({
           </div>
         </div>
 
-        {/* 工事種別分類（第1号〜第6号） - 住宅借入金等特別控除の場合のみ表示 */}
-        {certificate.purposeType === 'housing_loan' && certificate.works && (
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-2xl">📋</span>
-              <h2 className="text-xl font-bold text-blue-900">
-                工事種別（第1号〜第6号工事）
-              </h2>
-            </div>
-            <p className="text-sm text-blue-700 mb-4">
-              住宅借入金等特別控除における工事種別の分類
-            </p>
-            {(() => {
-              const calculation = calculateCertificateCost(
-                certificate.works as any,
-                certificate.subsidyAmount
-              );
-              const breakdown = getWorkTypeBreakdown(calculation);
+        {/* 改修工事一覧 */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-800">改修工事一覧</h2>
+          </div>
 
-              return (
-                <div className="space-y-3">
-                  {breakdown.map((work) => (
-                    <div
-                      key={work.classificationNumber}
-                      className={`p-4 rounded-lg border-2 ${
-                        work.hasWork
-                          ? 'bg-white border-blue-300'
-                          : 'bg-gray-50 border-gray-200'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <span className="text-lg">
-                            {work.hasWork ? '✅' : '⬜'}
-                          </span>
-                          <div>
-                            <p className="font-semibold text-gray-900">
-                              {work.classification}: {work.label}
-                            </p>
-                            {work.hasWork && (
-                              <p className="text-lg font-bold text-blue-600 mt-1">
-                                ¥{work.amount.toLocaleString()}
+          {/* 登録済み改修工事 */}
+          {combinedCalculation && combinedCalculation.summary.hasRenovations ? (
+            <div className="space-y-4 mb-6">
+              {Object.entries(combinedCalculation.renovations).map(([key, renovation]) => {
+                if (!renovation) return null;
+                const color = getRenovationColor(key);
+                return (
+                  <div
+                    key={key}
+                    className={`border-2 border-${color}-200 bg-${color}-50 rounded-lg p-4`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3 flex-1">
+                        <span className="text-2xl">{getRenovationIcon(key)}</span>
+                        <div className="flex-1">
+                          <h3 className={`font-semibold text-${color}-900 text-lg`}>
+                            {getRenovationLabel(key)}
+                          </h3>
+                          <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                            <div>
+                              <p className={`text-${color}-600 text-xs`}>工事費用</p>
+                              <p className={`font-semibold text-${color}-900`}>
+                                ¥{renovation.totalCost.toLocaleString()}
                               </p>
-                            )}
+                            </div>
+                            <div>
+                              <p className={`text-${color}-600 text-xs`}>補助金控除後</p>
+                              <p className={`font-semibold text-${color}-900`}>
+                                ¥{renovation.afterSubsidy.toLocaleString()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className={`text-${color}-600 text-xs`}>控除対象額</p>
+                              <p className={`font-semibold text-${color}-900`}>
+                                ¥{renovation.deductibleAmount.toLocaleString()}
+                              </p>
+                            </div>
+                            <div>
+                              <p className={`text-${color}-600 text-xs`}>上限適用後</p>
+                              <p className={`font-bold text-${color}-900`}>
+                                ¥{renovation.maxDeduction.toLocaleString()}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-
-                  <div className="mt-6 p-5 bg-white rounded-lg border-2 border-blue-400">
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-700 font-medium">工事費用合計:</span>
-                        <span className="text-xl font-bold">
-                          ¥{calculation.totalWorkCost.toLocaleString()}
-                        </span>
+                      <div className="flex gap-2 ml-4">
+                        <Link
+                          href={`/${getRenovationPath(key)}?certificateId=${certificateId}`}
+                          className={`px-3 py-1 bg-${color}-600 text-white text-sm rounded hover:bg-${color}-700 transition-colors`}
+                        >
+                          編集
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteRenovation(key)}
+                          className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                        >
+                          削除
+                        </button>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-700 font-medium">補助金額:</span>
-                        <span className="text-xl font-bold text-red-600">
-                          -¥{calculation.subsidyAmount.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center pt-3 border-t-2 border-gray-200">
-                        <span className="text-lg font-bold">控除対象額:</span>
-                        <span className="text-2xl font-bold text-blue-600">
-                          ¥{calculation.deductibleAmount.toLocaleString()}
-                        </span>
-                      </div>
-
-                      {/* 100万円要件のチェック */}
-                      <div className="mt-4 pt-4 border-t border-gray-200">
-                        {calculation.meetsHousingLoanRequirement ? (
-                          <div className="flex items-center gap-2 text-green-700">
-                            <span className="text-xl">✓</span>
-                            <span className="font-semibold">
-                              住宅借入金等特別控除の要件を満たしています（100万円以上）
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-red-700">
-                            <span className="text-xl">⚠</span>
-                            <span className="font-semibold">
-                              注意: 控除対象額が100万円未満です（現在: {(
-                                calculation.deductibleAmount / 10000
-                              ).toLocaleString()}万円）
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* 工事内容 */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">工事内容詳細</h2>
-          {certificate.works && (
-            <div className="space-y-6">
-              {Object.entries(certificate.works).map(([key, workItems]) => {
-                if (!workItems || workItems.length === 0) return null;
-                return (
-                  <div key={key}>
-                    <h3 className="text-lg font-semibold text-gray-700 mb-3">
-                      {getWorkTypeLabel(key)}
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 border-b">
-                          <tr>
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                              工事種別
-                            </th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                              数量
-                            </th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                              単価
-                            </th>
-                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                              金額
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {workItems.map((work) => (
-                            <tr key={work.id}>
-                              <td className="px-4 py-3 text-gray-900">
-                                {work.workType}
-                              </td>
-                              <td className="px-4 py-3 text-right text-gray-900">
-                                {work.quantity.toLocaleString()}
-                              </td>
-                              <td className="px-4 py-3 text-right text-gray-900">
-                                ¥{work.unitPrice.toLocaleString()}
-                              </td>
-                              <td className="px-4 py-3 text-right font-medium text-gray-900">
-                                ¥{work.totalAmount.toLocaleString()}
-                              </td>
-                            </tr>
-                          ))}
-                          <tr className="bg-gray-50 font-semibold">
-                            <td
-                              colSpan={3}
-                              className="px-4 py-3 text-right text-gray-700"
-                            >
-                              小計
-                            </td>
-                            <td className="px-4 py-3 text-right text-gray-900">
-                              ¥{calculateWorkTotal(workItems).toLocaleString()}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
                     </div>
                   </div>
                 );
               })}
             </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-4xl mb-2">📝</p>
+              <p>まだ改修工事が登録されていません</p>
+              <p className="text-sm mt-1">下記から工事を追加してください</p>
+            </div>
           )}
-        </div>
 
-        {/* 金額サマリー */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">金額サマリー</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center pb-2 border-b">
-              <span className="text-gray-700">工事費用合計</span>
-              <span className="text-xl font-semibold text-gray-900">
-                ¥{calculateGrandTotal().toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pb-2 border-b">
-              <span className="text-gray-700">補助金額</span>
-              <span className="text-xl font-semibold text-red-600">
-                -¥{certificate.subsidyAmount.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between items-center pt-2">
-              <span className="text-lg font-bold text-gray-900">
-                控除対象額
-              </span>
-              <span className="text-2xl font-bold text-blue-600">
-                ¥{calculateDeductibleAmount().toLocaleString()}
-              </span>
+          {/* 工事追加ボタン */}
+          <div className="border-t pt-4">
+            <h3 className="font-semibold text-gray-700 mb-3">工事を追加</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {[
+                { key: 'seismic', path: 'seismic-reform' },
+                { key: 'barrierFree', path: 'barrier-free-reform' },
+                { key: 'energy', path: 'energy-saving-reform' },
+                { key: 'cohabitation', path: 'cohabitation-reform' },
+                { key: 'childcare', path: 'childcare-reform' },
+                { key: 'other', path: 'other-renovation' },
+              ].map(({ key, path }) => {
+                const color = getRenovationColor(key);
+                const hasData = combinedCalculation?.renovations[key as keyof typeof combinedCalculation.renovations];
+                return (
+                  <Link
+                    key={key}
+                    href={`/${path}?certificateId=${certificateId}`}
+                    className={`flex items-center gap-2 p-3 border-2 border-dashed rounded-lg transition-colors ${
+                      hasData
+                        ? `border-${color}-300 bg-${color}-50 hover:bg-${color}-100`
+                        : `border-gray-300 hover:border-${color}-400 hover:bg-${color}-50`
+                    }`}
+                  >
+                    <span className="text-xl">{getRenovationIcon(key)}</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      {getRenovationLabel(key)}
+                    </span>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </div>
+
+        {/* 統合計算結果 */}
+        {combinedCalculation && combinedCalculation.summary.hasRenovations && (
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-2xl">📊</span>
+              <h2 className="text-xl font-bold text-blue-900">統合計算結果</h2>
+            </div>
+            <p className="text-sm text-blue-700 mb-4">
+              Excel Row 442-460: 複数改修種別の統合計算（1,000万円上限適用）
+            </p>
+
+            <div className="bg-white rounded-lg p-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-600 mb-1">⑱ 最大工事費（補助金差引後）</p>
+                  <p className="text-2xl font-bold text-blue-900">
+                    ¥{combinedCalculation.combined.totalDeductible.toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <p className="text-sm text-green-600 mb-1">⑰ 最大控除額（10%控除分）</p>
+                  <p className="text-2xl font-bold text-green-900">
+                    ¥{combinedCalculation.combined.maxControlAmount.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    ※1,000万円上限適用済み
+                  </p>
+                </div>
+              </div>
+
+              {combinedCalculation.combined.excessAmount > 0 && (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">⚠️</span>
+                    <div>
+                      <p className="text-sm text-yellow-700 font-semibold">
+                        ⑲ 超過額: ¥{combinedCalculation.combined.excessAmount.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-yellow-600 mt-1">
+                        控除対象額が1,000万円の上限を超えています
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t-2 border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">㉑ 最終控除対象額</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      ⑱とその他増改築の合算
+                    </p>
+                  </div>
+                  <p className="text-3xl font-bold text-indigo-900">
+                    ¥{combinedCalculation.combined.finalDeductible.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">㉒ 残り控除可能額</p>
+                  <p className="text-lg font-semibold text-gray-700">
+                    ¥{combinedCalculation.combined.remaining.toLocaleString()}
+                  </p>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  1,000万円 - ⑰ = 残り控除可能額
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 削除確認モーダル */}

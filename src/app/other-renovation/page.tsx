@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { OtherRenovationCalculationResult } from '@/app/api/other-renovation-works/types';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { OTHER_RENOVATION_CATEGORIES } from '@/lib/other-renovation-work-types';
 
 // フォームのスキーマ
 const otherRenovationFormSchema = z.object({
@@ -21,17 +23,17 @@ const otherRenovationFormSchema = z.object({
 
 type OtherRenovationFormData = z.infer<typeof otherRenovationFormSchema>;
 
-// カテゴリデータ型
-type Category = {
-  code: string;
-  name: string;
-  description: string;
-};
+function OtherRenovationContent() {
+  const searchParams = useSearchParams();
+  const certificateId = searchParams.get('certificateId');
 
-export default function OtherRenovationPage() {
-  const [calculationResult, setCalculationResult] = useState<OtherRenovationCalculationResult | null>(null);
+  const [calculationResult, setCalculationResult] = useState<any | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [certificateInfo, setCertificateInfo] = useState<{
+    applicantName: string;
+    propertyAddress: string;
+  } | null>(null);
 
   const {
     register,
@@ -52,50 +54,111 @@ export default function OtherRenovationPage() {
     name: 'works',
   });
 
-  // カテゴリデータを取得
+  // 証明書情報を取得
   useEffect(() => {
-    fetch('/api/other-renovation-works/categories')
-      .then((res) => res.json())
-      .then((result) => {
-        if (result.success) {
-          setCategories(result.data);
-        }
-      })
-      .catch((error) => console.error('Error fetching categories:', error));
-  }, []);
+    if (certificateId) {
+      fetch(`/api/certificates/${certificateId}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.success) {
+            setCertificateInfo({
+              applicantName: result.data.applicantName,
+              propertyAddress: result.data.propertyAddress,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch certificate:', error);
+        });
+    }
+  }, [certificateId]);
 
   const onSubmit = async (data: OtherRenovationFormData) => {
+    if (!certificateId) {
+      alert('証明書IDが指定されていません');
+      return;
+    }
+
     setIsCalculating(true);
+    setIsSaving(true);
     try {
-      const response = await fetch('/api/other-renovation-works/calculate', {
+      // 新しいAPI構造: 直接証明書に紐付けて保存
+      const worksData = data.works.map((work) => {
+        const category = OTHER_RENOVATION_CATEGORIES.find((cat) => cat.code === work.categoryCode);
+        return {
+          categoryCode: work.categoryCode,
+          categoryName: category?.name || '',
+          workDescription: work.workDescription,
+          amount: work.amount,
+          residentRatio: work.residentRatio,
+        };
+      });
+
+      const response = await fetch(`/api/certificates/${certificateId}/other-renovation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          works: worksData,
+          subsidyAmount: data.subsidyAmount,
+        }),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        setCalculationResult(result.data);
+        setCalculationResult(result.data.calculation);
+        alert('工事データを保存しました');
+        // 証明書詳細ページへリダイレクト
+        window.location.href = `/certificate/${certificateId}`;
       } else {
-        alert('計算エラー: ' + result.error);
+        alert('保存エラー: ' + result.error);
       }
     } catch (error) {
-      console.error('Calculation error:', error);
-      alert('計算中にエラーが発生しました');
+      console.error('Save error:', error);
+      alert('保存中にエラーが発生しました');
     } finally {
       setIsCalculating(false);
+      setIsSaving(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-5xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          その他増改築等工事 計算ツール
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            その他増改築等工事 計算ツール
+          </h1>
+          <Link
+            href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=3'}
+            className="text-indigo-600 hover:text-indigo-800 flex items-center gap-2"
+          >
+            ← {certificateId ? '証明書詳細へ戻る' : '証明者情報入力へ'}
+          </Link>
+        </div>
+
+        {/* 証明書情報表示 */}
+        {certificateId && certificateInfo && (
+          <div className="bg-indigo-50 border-2 border-indigo-200 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-indigo-900 mb-2">📋 証明書情報</h2>
+            <div className="text-sm text-indigo-800 space-y-1">
+              <p><strong>申請者:</strong> {certificateInfo.applicantName}</p>
+              <p><strong>物件所在地:</strong> {certificateInfo.propertyAddress}</p>
+              <p><strong>証明書ID:</strong> {certificateId}</p>
+            </div>
+          </div>
+        )}
+
+        {/* certificateIdがない場合の警告 */}
+        {!certificateId && (
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-800">
+              ⚠️ 証明書IDが指定されていません。証明書作成フローから開始してください。
+            </p>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
@@ -134,7 +197,7 @@ export default function OtherRenovationPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                     >
                       <option value="">選択してください</option>
-                      {categories.map((category) => (
+                      {OTHER_RENOVATION_CATEGORIES.map((category) => (
                         <option key={category.code} value={category.code}>
                           {category.name}
                         </option>
@@ -151,7 +214,7 @@ export default function OtherRenovationPage() {
                   {watch(`works.${index}.categoryCode`) && (
                     <div className="mb-4 p-3 bg-indigo-50 rounded-md">
                       {(() => {
-                        const selectedCategory = categories.find(
+                        const selectedCategory = OTHER_RENOVATION_CATEGORIES.find(
                           (cat) => cat.code === watch(`works.${index}.categoryCode`)
                         );
                         return selectedCategory ? (
@@ -255,83 +318,30 @@ export default function OtherRenovationPage() {
               )}
             </div>
 
-            {/* 計算ボタン */}
+            {/* 保存ボタン */}
             <div className="mt-6">
               <button
                 type="submit"
-                disabled={isCalculating}
+                disabled={isCalculating || isSaving}
                 className="w-full bg-indigo-600 text-white py-3 px-6 rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
               >
-                {isCalculating ? '計算中...' : '金額を計算'}
+                {isCalculating || isSaving ? '保存中...' : '✓ 工事データを証明書に保存'}
               </button>
+              <p className="text-sm text-gray-600 text-center mt-2">
+                保存すると証明書に工事データが紐付けられます
+              </p>
             </div>
           </form>
         </div>
-
-        {/* 計算結果表示 */}
-        {calculationResult && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">計算結果</h2>
-
-            {/* 各工事の明細 */}
-            <div className="mb-6">
-              <h3 className="font-medium mb-3">工事明細</h3>
-              <div className="space-y-2">
-                {calculationResult.works.map((work, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded"
-                  >
-                    <div className="flex-1">
-                      <p className="font-medium">{work.categoryName}</p>
-                      <p className="text-sm text-gray-600">{work.workDescription}</p>
-                      <p className="text-sm text-gray-600">
-                        {work.amount.toLocaleString()}円
-                        {work.residentRatio && ` × ${work.residentRatio}%`}
-                      </p>
-                    </div>
-                    <div className="text-right ml-4">
-                      <p className="font-semibold text-lg">
-                        {work.calculatedAmount.toLocaleString()}円
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 合計・控除対象額 */}
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between text-lg">
-                <span>合計金額:</span>
-                <span className="font-semibold">
-                  {calculationResult.totalAmount.toLocaleString()}円
-                </span>
-              </div>
-
-              {calculationResult.subsidyAmount > 0 && (
-                <div className="flex justify-between">
-                  <span>補助金額:</span>
-                  <span className="text-red-600">
-                    - {calculationResult.subsidyAmount.toLocaleString()}円
-                  </span>
-                </div>
-              )}
-
-              <div className="flex justify-between text-xl font-bold text-indigo-600 pt-2 border-t">
-                <span>控除対象額:</span>
-                <span>{calculationResult.deductibleAmount.toLocaleString()}円</span>
-              </div>
-
-              <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded">
-                <p className="text-sm text-indigo-800">
-                  ℹ️ その他増改築等工事は住宅借入金等特別控除の対象です
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
+  );
+}
+
+export default function OtherRenovationPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+      <OtherRenovationContent />
+    </Suspense>
   );
 }

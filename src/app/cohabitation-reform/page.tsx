@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { CohabitationCalculationResult } from '@/app/api/cohabitation-works/types';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { COHABITATION_WORK_TYPES, getCohabitationWorkTypesByCategory } from '@/lib/cohabitation-work-types';
 
 // フォームのスキーマ
 const cohabitationFormSchema = z.object({
@@ -20,23 +22,17 @@ const cohabitationFormSchema = z.object({
 
 type CohabitationFormData = z.infer<typeof cohabitationFormSchema>;
 
-// カテゴリ別の工事種別データ型
-type WorkTypesByCategory = {
-  category: string;
-  works: Array<{
-    code: string;
-    name: string;
-    unitPrice: number;
-    unit: string;
-    description: string;
-  }>;
-};
+function CohabitationReformContent() {
+  const searchParams = useSearchParams();
+  const certificateId = searchParams.get('certificateId');
 
-export default function CohabitationReformPage() {
-  const [calculationResult, setCalculationResult] = useState<CohabitationCalculationResult | null>(null);
+  const [calculationResult, setCalculationResult] = useState<any | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [workTypesByCategory, setWorkTypesByCategory] = useState<WorkTypesByCategory[]>([]);
-  const [allWorkTypes, setAllWorkTypes] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [certificateInfo, setCertificateInfo] = useState<{
+    applicantName: string;
+    propertyAddress: string;
+  } | null>(null);
 
   const {
     register,
@@ -57,51 +53,120 @@ export default function CohabitationReformPage() {
     name: 'works',
   });
 
-  // 工事種別データを取得
+  // 証明書情報を取得
   useEffect(() => {
-    fetch('/api/cohabitation-works/work-types')
-      .then((res) => res.json())
-      .then((result) => {
-        if (result.success) {
-          setAllWorkTypes(result.data.all);
-          setWorkTypesByCategory(result.data.byCategory);
-        }
-      })
-      .catch((error) => console.error('Error fetching work types:', error));
-  }, []);
+    if (certificateId) {
+      fetch(`/api/certificates/${certificateId}`)
+        .then((res) => res.json())
+        .then((result) => {
+          if (result.success) {
+            setCertificateInfo({
+              applicantName: result.data.applicantName,
+              propertyAddress: result.data.propertyAddress,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch certificate:', error);
+        });
+    }
+  }, [certificateId]);
 
   const onSubmit = async (data: CohabitationFormData) => {
+    if (!certificateId) {
+      alert('証明書IDが指定されていません');
+      return;
+    }
+
     setIsCalculating(true);
+    setIsSaving(true);
     try {
-      const response = await fetch('/api/cohabitation-works/calculate', {
+      // 新しいAPI構造: 直接証明書に紐付けて保存
+      const worksData = data.works.map((work) => {
+        const workType = COHABITATION_WORK_TYPES.find((wt) => wt.code === work.workTypeCode);
+        return {
+          workTypeCode: work.workTypeCode,
+          workName: workType?.name || '',
+          category: workType?.category || '',
+          unitPrice: workType?.unitPrice || 0,
+          unit: workType?.unit || '',
+          quantity: work.quantity,
+          ratio: work.residentRatio,
+        };
+      });
+
+      const response = await fetch(`/api/certificates/${certificateId}/cohabitation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          works: worksData,
+          subsidyAmount: data.subsidyAmount,
+        }),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        setCalculationResult(result.data);
+        setCalculationResult(result.data.calculation);
+        alert('工事データを保存しました');
+        // 証明書詳細ページへリダイレクト
+        window.location.href = `/certificate/${certificateId}`;
       } else {
-        alert('計算エラー: ' + result.error);
+        alert('保存エラー: ' + result.error);
       }
     } catch (error) {
-      console.error('Calculation error:', error);
-      alert('計算中にエラーが発生しました');
+      console.error('Save error:', error);
+      alert('保存中にエラーが発生しました');
     } finally {
       setIsCalculating(false);
+      setIsSaving(false);
     }
   };
+
+  // カテゴリ別の工事種別を取得
+  const categoryMap = getCohabitationWorkTypesByCategory();
+  const workTypesByCategory = Array.from(categoryMap.entries()).map(([category, works]) => ({
+    category,
+    works,
+  }));
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-5xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          同居対応改修工事 計算ツール
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">
+            同居対応改修工事 計算ツール
+          </h1>
+          <Link
+            href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=3'}
+            className="text-purple-600 hover:text-purple-800 flex items-center gap-2"
+          >
+            ← {certificateId ? '証明書詳細へ戻る' : '証明者情報入力へ'}
+          </Link>
+        </div>
+
+        {/* 証明書情報表示 */}
+        {certificateId && certificateInfo && (
+          <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-purple-900 mb-2">📋 証明書情報</h2>
+            <div className="text-sm text-purple-800 space-y-1">
+              <p><strong>申請者:</strong> {certificateInfo.applicantName}</p>
+              <p><strong>物件所在地:</strong> {certificateInfo.propertyAddress}</p>
+              <p><strong>証明書ID:</strong> {certificateId}</p>
+            </div>
+          </div>
+        )}
+
+        {/* certificateIdがない場合の警告 */}
+        {!certificateId && (
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-800">
+              ⚠️ 証明書IDが指定されていません。証明書作成フローから開始してください。
+            </p>
+          </div>
+        )}
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
@@ -158,7 +223,7 @@ export default function CohabitationReformPage() {
                   {watch(`works.${index}.workTypeCode`) && (
                     <div className="mb-4 p-3 bg-purple-50 rounded-md">
                       {(() => {
-                        const selectedWork = allWorkTypes.find(
+                        const selectedWork = COHABITATION_WORK_TYPES.find(
                           (wt) => wt.code === watch(`works.${index}.workTypeCode`)
                         );
                         return selectedWork ? (
@@ -247,92 +312,30 @@ export default function CohabitationReformPage() {
               )}
             </div>
 
-            {/* 計算ボタン */}
+            {/* 保存ボタン */}
             <div className="mt-6">
               <button
                 type="submit"
-                disabled={isCalculating}
+                disabled={isCalculating || isSaving}
                 className="w-full bg-purple-600 text-white py-3 px-6 rounded-md hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
               >
-                {isCalculating ? '計算中...' : '金額を計算'}
+                {isCalculating || isSaving ? '保存中...' : '✓ 工事データを証明書に保存'}
               </button>
+              <p className="text-sm text-gray-600 text-center mt-2">
+                保存すると証明書に工事データが紐付けられます
+              </p>
             </div>
           </form>
         </div>
-
-        {/* 計算結果表示 */}
-        {calculationResult && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">計算結果</h2>
-
-            {/* 各工事の明細（カテゴリ別） */}
-            <div className="mb-6">
-              <h3 className="font-medium mb-3">工事明細</h3>
-              <div className="space-y-2">
-                {calculationResult.works.map((work, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded"
-                  >
-                    <div>
-                      <p className="font-medium">{work.workName}</p>
-                      <p className="text-sm text-gray-600">
-                        [{work.category}] {work.unitPrice.toLocaleString()}円 × {work.quantity}{work.unit}
-                        {work.residentRatio && ` × ${work.residentRatio}%`}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-lg">
-                        {work.calculatedAmount.toLocaleString()}円
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 合計・控除対象額 */}
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between text-lg">
-                <span>合計金額:</span>
-                <span className="font-semibold">
-                  {calculationResult.totalAmount.toLocaleString()}円
-                </span>
-              </div>
-
-              {calculationResult.subsidyAmount > 0 && (
-                <div className="flex justify-between">
-                  <span>補助金額:</span>
-                  <span className="text-red-600">
-                    - {calculationResult.subsidyAmount.toLocaleString()}円
-                  </span>
-                </div>
-              )}
-
-              <div className="flex justify-between text-xl font-bold text-purple-600 pt-2 border-t">
-                <span>控除対象額:</span>
-                <span>{calculationResult.deductibleAmount.toLocaleString()}円</span>
-              </div>
-
-              {!calculationResult.isEligible && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ 控除対象額が50万円以下のため、減税対象外です
-                  </p>
-                </div>
-              )}
-
-              {calculationResult.deductibleAmount >= 2500000 && (
-                <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded">
-                  <p className="text-sm text-purple-800">
-                    ℹ️ 同居対応改修の控除対象額は最大250万円です
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
+  );
+}
+
+export default function CohabitationReformPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+      <CohabitationReformContent />
+    </Suspense>
   );
 }

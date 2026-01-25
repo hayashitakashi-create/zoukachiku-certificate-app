@@ -7,7 +7,6 @@ import { z } from 'zod';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { SEISMIC_WORK_TYPES } from '@/lib/seismic-work-types';
-import type { SeismicCalculationResult } from '@/app/api/seismic-works/types';
 
 // フォームのスキーマ
 const seismicFormSchema = z.object({
@@ -27,7 +26,7 @@ function SeismicReformContent() {
   const searchParams = useSearchParams();
   const certificateId = searchParams.get('certificateId');
 
-  const [calculationResult, setCalculationResult] = useState<SeismicCalculationResult | null>(null);
+  const [calculationResult, setCalculationResult] = useState<any | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [certificateInfo, setCertificateInfo] = useState<{
@@ -74,58 +73,42 @@ function SeismicReformContent() {
   }, [certificateId]);
 
   const onSubmit = async (data: SeismicFormData) => {
-    setIsCalculating(true);
-    try {
-      const response = await fetch('/api/seismic-works/calculate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        setCalculationResult(result.data);
-      } else {
-        alert('計算エラー: ' + result.error);
-      }
-    } catch (error) {
-      console.error('Calculation error:', error);
-      alert('計算中にエラーが発生しました');
-    } finally {
-      setIsCalculating(false);
-    }
-  };
-
-  const handleSaveWork = async () => {
     if (!certificateId) {
       alert('証明書IDが指定されていません');
       return;
     }
 
-    if (!calculationResult) {
-      alert('まず計算を実行してください');
-      return;
-    }
-
+    setIsCalculating(true);
     setIsSaving(true);
     try {
-      const response = await fetch('/api/seismic-works', {
+      // 新しいAPI構造: 直接証明書に紐付けて保存
+      const worksData = data.works.map((work) => {
+        const workType = SEISMIC_WORK_TYPES.find((wt) => wt.code === work.workTypeCode);
+        return {
+          workTypeCode: work.workTypeCode,
+          workName: workType?.name || '',
+          unitPrice: workType?.unitPrice || 0,
+          unit: workType?.unit || '',
+          quantity: work.quantity,
+          ratio: work.ratio,
+        };
+      });
+
+      const response = await fetch(`/api/certificates/${certificateId}/seismic`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          certificateId,
-          works: calculationResult.works,
+          works: worksData,
+          subsidyAmount: data.subsidyAmount,
         }),
       });
 
       const result = await response.json();
 
       if (result.success) {
+        setCalculationResult(result.data.calculation);
         alert('工事データを保存しました');
         // 証明書詳細ページへリダイレクト
         window.location.href = `/certificate/${certificateId}`;
@@ -136,6 +119,7 @@ function SeismicReformContent() {
       console.error('Save error:', error);
       alert('保存中にエラーが発生しました');
     } finally {
+      setIsCalculating(false);
       setIsSaving(false);
     }
   };
@@ -312,121 +296,21 @@ function SeismicReformContent() {
               )}
             </div>
 
-            {/* 計算ボタン */}
+            {/* 保存ボタン */}
             <div className="mt-6">
               <button
                 type="submit"
-                disabled={isCalculating}
+                disabled={isCalculating || isSaving}
                 className="w-full bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
               >
-                {isCalculating ? '計算中...' : '金額を計算'}
+                {isCalculating || isSaving ? '保存中...' : '✓ 工事データを証明書に保存'}
               </button>
+              <p className="text-sm text-gray-600 text-center mt-2">
+                保存すると証明書に工事データが紐付けられます
+              </p>
             </div>
           </form>
         </div>
-
-        {/* 計算結果表示 */}
-        {calculationResult && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">計算結果</h2>
-
-            {/* 各工事の明細 */}
-            <div className="mb-6">
-              <h3 className="font-medium mb-3">工事明細</h3>
-              <div className="space-y-2">
-                {calculationResult.works.map((work, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded"
-                  >
-                    <div>
-                      <p className="font-medium">{work.workName}</p>
-                      <p className="text-sm text-gray-600">
-                        {work.unitPrice.toLocaleString()}円 × {work.quantity}{work.unit}
-                        {work.ratio && ` × ${work.ratio}%`}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-lg">
-                        {work.calculatedAmount.toLocaleString()}円
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 合計・控除対象額 */}
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between text-lg">
-                <span>合計金額:</span>
-                <span className="font-semibold">
-                  {calculationResult.totalAmount.toLocaleString()}円
-                </span>
-              </div>
-
-              {calculationResult.subsidyAmount > 0 && (
-                <div className="flex justify-between">
-                  <span>補助金額:</span>
-                  <span className="text-red-600">
-                    - {calculationResult.subsidyAmount.toLocaleString()}円
-                  </span>
-                </div>
-              )}
-
-              <div className="flex justify-between text-xl font-bold text-blue-600 pt-2 border-t">
-                <span>控除対象額:</span>
-                <span>{calculationResult.deductibleAmount.toLocaleString()}円</span>
-              </div>
-
-              {!calculationResult.isEligible && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ 控除対象額が50万円以下のため、減税対象外です
-                  </p>
-                </div>
-              )}
-
-              {calculationResult.deductibleAmount >= 2500000 && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                  <p className="text-sm text-blue-800">
-                    ℹ️ 耐震改修の控除対象額は最大250万円です
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* 保存・次へ進むボタン */}
-            <div className="mt-6 pt-6 border-t space-y-3">
-              {certificateId ? (
-                <>
-                  <button
-                    onClick={handleSaveWork}
-                    disabled={isSaving}
-                    className="w-full bg-green-600 text-white py-3 px-6 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
-                  >
-                    {isSaving ? '保存中...' : '✓ 工事データを証明書に保存'}
-                  </button>
-                  <p className="text-sm text-gray-600 text-center">
-                    保存すると証明書に工事データが紐付けられます
-                  </p>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/certificate/create?step=3"
-                    className="block w-full bg-blue-600 text-white text-center py-3 px-6 rounded-md hover:bg-blue-700 font-medium transition-colors"
-                  >
-                    次へ：証明者情報入力 →
-                  </Link>
-                  <p className="text-sm text-gray-600 text-center">
-                    計算結果を確認したら、証明者情報の入力に進んでください
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
