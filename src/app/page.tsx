@@ -7,6 +7,7 @@ type Certificate = {
   id: string;
   applicantName: string;
   propertyAddress: string;
+  purposeType: string;
   issueDate: string | null;
   status: string;
   createdAt: string;
@@ -40,6 +41,16 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getPurposeTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      housing_loan: '住宅借入金等特別控除',
+      reform_tax: '住宅借入金等特別税額控除',
+      resale: '既存住宅売買瑕疵保険加入用',
+      property_tax: '固定資産税減額用',
+    };
+    return labels[type] || type;
   };
 
   const getStatusLabel = (status: string) => {
@@ -224,6 +235,9 @@ export default function HomePage() {
                       物件所在地
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      用途
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       発行日
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -248,6 +262,11 @@ export default function HomePage() {
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900">
                           {cert.propertyAddress}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">
+                          {getPurposeTypeLabel(cert.purposeType)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

@@ -757,7 +757,7 @@ export default function CertificateCreatePage() {
                       },
                       {
                         value: 'reform_tax',
-                        label: '住宅特定改修特別税額控除',
+                        label: '住宅借入金等特別税額控除',
                         description: '改修促進税制（投資型減税）',
                       },
                       {
@@ -1195,7 +1195,7 @@ export default function CertificateCreatePage() {
                       <p className="text-gray-600">証明書の用途</p>
                       <p className="font-medium">
                         {formData.purposeType === 'housing_loan' && '住宅借入金等特別控除'}
-                        {formData.purposeType === 'reform_tax' && '住宅特定改修特別税額控除'}
+                        {formData.purposeType === 'reform_tax' && '住宅借入金等特別税額控除'}
                         {formData.purposeType === 'resale' && '既存住宅の譲渡所得の特別控除等'}
                         {formData.purposeType === 'property_tax' && '固定資産税の減額'}
                         {!formData.purposeType && '（未選択）'}
