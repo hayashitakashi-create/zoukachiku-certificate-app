@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
+import Layout from '@/components/Layout';
 import type { LongTermHousingCalculationResult } from '@/app/api/long-term-housing-works/types';
 
 // フォームのスキーマ
@@ -99,11 +102,23 @@ export default function LongTermHousingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-5xl mx-auto px-4">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
-          長期優良住宅化改修工事 計算ツール
-        </h1>
+    <Layout
+      title="長期優良住宅化改修工事"
+      actions={
+        <Link
+          href="/certificate/create?step=3"
+          className="px-6 py-2.5 rounded-lg text-base font-medium transition-all duration-200 flex items-center gap-2"
+          style={{
+            backgroundColor: '#F1F5F9',
+            color: '#475569',
+          }}
+        >
+          <ArrowLeft className="w-5 h-5" />
+          証明者情報入力へ
+        </Link>
+      }
+    >
+      <div className="max-w-5xl">
 
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
@@ -361,6 +376,6 @@ export default function LongTermHousingPage() {
           </div>
         )}
       </div>
-    </div>
+    </Layout>
   );
 }

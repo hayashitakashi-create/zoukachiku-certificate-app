@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import Layout from '@/components/Layout';
 import { ENERGY_SAVING_WORK_TYPES, getEnergySavingWorkTypesByCategory, hasSolarPowerWork } from '@/lib/energy-saving-work-types';
 
 // フォームのスキーマ
@@ -141,19 +143,23 @@ function EnergySavingReformContent() {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-5xl mx-auto px-4">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            省エネ改修工事 計算ツール
-          </h1>
-          <Link
-            href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=3'}
-            className="text-orange-600 hover:text-orange-800 flex items-center gap-2"
-          >
-            ← {certificateId ? '証明書詳細へ戻る' : '証明者情報入力へ'}
-          </Link>
-        </div>
+    <Layout
+      title="省エネ改修工事"
+      actions={
+        <Link
+          href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=3'}
+          className="px-6 py-2.5 rounded-lg text-base font-medium transition-all duration-200 flex items-center gap-2"
+          style={{
+            backgroundColor: '#F1F5F9',
+            color: '#475569',
+          }}
+        >
+          <ArrowLeft className="w-5 h-5" />
+          {certificateId ? '証明書詳細へ戻る' : '証明者情報入力へ'}
+        </Link>
+      }
+    >
+      <div className="max-w-5xl">
 
         {/* 証明書情報表示 */}
         {certificateId && certificateInfo && (
@@ -368,7 +374,7 @@ function EnergySavingReformContent() {
           </form>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
 
