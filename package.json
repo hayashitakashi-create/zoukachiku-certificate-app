@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && SKIP_DB_INIT=true next build",
+    "build": "prisma generate && prisma migrate deploy && SKIP_DB_INIT=true next build",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate"
