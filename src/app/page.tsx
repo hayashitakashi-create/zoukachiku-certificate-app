@@ -12,6 +12,8 @@ import {
   Calendar,
   CheckCircle,
   Edit3,
+  Search,
+  X,
 } from 'lucide-react';
 
 type Certificate = {
@@ -173,6 +175,7 @@ function CertificateRow({ cert, index }: { cert: Certificate; index: number }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.4, delay: index * 0.05 }}
       whileHover={{ y: -8 }}
+      onClick={() => window.location.href = `/certificate/${cert.id}`}
       className="group relative bg-white rounded-2xl p-5 border border-[rgba(0,0,0,0.08)] cursor-pointer overflow-hidden"
       style={{
         boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
@@ -269,6 +272,11 @@ export default function HomePage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [activeMenu, setActiveMenu] = useState('home');
 
+  // 検索フィルター
+  const [searchName, setSearchName] = useState('');
+  const [searchAddress, setSearchAddress] = useState('');
+  const [searchPurpose, setSearchPurpose] = useState('all');
+
   useEffect(() => {
     fetchCertificates();
   }, [statusFilter]);
@@ -292,6 +300,23 @@ export default function HomePage() {
       setLoading(false);
     }
   };
+
+  // フィルタリング処理
+  const filteredCertificates = certificates.filter(cert => {
+    // 氏名検索
+    if (searchName && !cert.applicantName.toLowerCase().includes(searchName.toLowerCase())) {
+      return false;
+    }
+    // 住所検索
+    if (searchAddress && !cert.propertyAddress.toLowerCase().includes(searchAddress.toLowerCase())) {
+      return false;
+    }
+    // 用途検索
+    if (searchPurpose !== 'all' && cert.purposeType !== searchPurpose) {
+      return false;
+    }
+    return true;
+  });
 
   // 統計計算
   const totalCount = certificates.length;
@@ -353,6 +378,10 @@ export default function HomePage() {
                 setActiveMenu(item.id);
                 if (item.id === 'settings') {
                   window.location.href = '/settings';
+                } else if (item.id === 'certificates') {
+                  // 証明書一覧セクションにスクロール
+                  const certificateSection = document.querySelector('main');
+                  certificateSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
               }}
               className="w-full flex items-center gap-3 px-3 py-3 rounded-lg text-lg font-medium transition-all duration-200"
@@ -490,6 +519,102 @@ export default function HomePage() {
               </div>
             </div>
 
+            {/* 検索フィルター */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="bg-white rounded-2xl p-6 mb-6 border border-[rgba(0,0,0,0.08)]"
+              style={{ boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)' }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Search className="w-5 h-5" style={{ color: '#86868B' }} />
+                <h4 className="text-lg font-semibold" style={{ color: '#1D1D1F' }}>
+                  検索フィルター
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 氏名検索 */}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#86868B' }}>
+                    氏名
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchName}
+                      onChange={(e) => setSearchName(e.target.value)}
+                      placeholder="氏名で検索..."
+                      className="w-full px-4 py-2.5 rounded-lg border border-[rgba(0,0,0,0.12)] focus:outline-none focus:ring-2 focus:ring-[#007AFF] focus:border-transparent transition-all text-base"
+                      style={{ color: '#1D1D1F' }}
+                    />
+                    {searchName && (
+                      <button
+                        onClick={() => setSearchName('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 住所検索 */}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#86868B' }}>
+                    住所
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchAddress}
+                      onChange={(e) => setSearchAddress(e.target.value)}
+                      placeholder="住所で検索..."
+                      className="w-full px-4 py-2.5 rounded-lg border border-[rgba(0,0,0,0.12)] focus:outline-none focus:ring-2 focus:ring-[#007AFF] focus:border-transparent transition-all text-base"
+                      style={{ color: '#1D1D1F' }}
+                    />
+                    {searchAddress && (
+                      <button
+                        onClick={() => setSearchAddress('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 用途検索 */}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#86868B' }}>
+                    用途
+                  </label>
+                  <select
+                    value={searchPurpose}
+                    onChange={(e) => setSearchPurpose(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-[rgba(0,0,0,0.12)] focus:outline-none focus:ring-2 focus:ring-[#007AFF] focus:border-transparent transition-all text-base"
+                    style={{ color: '#1D1D1F' }}
+                  >
+                    <option value="all">すべて</option>
+                    <option value="housing_loan">住宅借入金等特別控除</option>
+                    <option value="reform_tax">住宅借入金等特別税額控除</option>
+                    <option value="resale">既存住宅売買瑕疵保険加入用</option>
+                    <option value="property_tax">固定資産税減額用</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 検索結果数 */}
+              {(searchName || searchAddress || searchPurpose !== 'all') && (
+                <div className="mt-4 pt-4 border-t border-[rgba(0,0,0,0.08)]">
+                  <p className="text-sm" style={{ color: '#86868B' }}>
+                    {filteredCertificates.length}件の証明書が見つかりました
+                  </p>
+                </div>
+              )}
+            </motion.div>
+
             {loading ? (
               <div className="text-center py-12 text-base" style={{ color: '#86868B' }}>
                 読み込み中...
@@ -521,9 +646,24 @@ export default function HomePage() {
                   最初の証明書を作成する
                 </Link>
               </motion.div>
+            ) : filteredCertificates.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white rounded-2xl p-12 text-center border border-[rgba(0,0,0,0.08)]"
+                style={{ boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)' }}
+              >
+                <div className="text-6xl mb-4">🔍</div>
+                <p className="text-lg mb-2" style={{ color: '#1D1D1F' }}>
+                  該当する証明書が見つかりません
+                </p>
+                <p className="text-base" style={{ color: '#86868B' }}>
+                  検索条件を変更してみてください
+                </p>
+              </motion.div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {certificates.map((cert, index) => (
+                {filteredCertificates.map((cert, index) => (
                   <CertificateRow key={cert.id} cert={cert} index={index} />
                 ))}
               </div>

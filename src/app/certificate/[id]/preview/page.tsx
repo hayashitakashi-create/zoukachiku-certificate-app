@@ -228,8 +228,106 @@ export default function CertificatePreviewPage() {
           <section className="mb-8">
             <h3 className="text-lg font-semibold mb-4 bg-indigo-100 p-3 rounded">（１）証明書の用途</h3>
             <div className="pl-4">
-              <div className="text-lg font-medium text-indigo-900">
+              <div className="text-lg font-medium text-indigo-900 mb-4">
                 {getPurposeTypeLabel(certificate.purposeType)}
+              </div>
+
+              {/* 用途詳細 */}
+              <div className="mt-4 space-y-4">
+                {/* reform_tax */}
+                {certificate.purposeType === 'reform_tax' && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">制度概要</h4>
+                      <p className="text-sm text-gray-700">
+                        住宅ローンを利用せず、自己資金で特定の改修工事（バリアフリー、省エネ、同居対応、子育て対応）を行った場合に、標準的な工事費用相当額の10%を所得税額から控除できる制度（投資型減税）です。
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">適用要件</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                        <li>特定改修工事の標準的な工事費用相当額が50万円を超えること</li>
+                        <li>自己の居住用住宅であること</li>
+                        <li>工事後6か月以内に居住を開始すること</li>
+                        <li>床面積が50㎡以上であること</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">控除額</h4>
+                      <p className="text-sm text-gray-700">
+                        標準的な工事費用相当額（上限1,000万円）の10%を、その年の所得税額から控除できます。
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* housing_loan */}
+                {certificate.purposeType === 'housing_loan' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">制度概要</h4>
+                      <p className="text-sm text-gray-700">
+                        住宅ローンを利用して一定の増改築等工事を行った場合に、年末の住宅ローン残高の一定割合を所得税額から控除できる制度です。
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">適用要件</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                        <li>工事費用が100万円を超えること</li>
+                        <li>10年以上のローンを利用すること</li>
+                        <li>自己の居住用住宅であること</li>
+                        <li>床面積が50㎡以上であること</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* resale */}
+                {certificate.purposeType === 'resale' && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">制度概要</h4>
+                      <p className="text-sm text-gray-700">
+                        中古住宅の売買において、既存住宅売買瑕疵保険に加入するために必要な証明書です。住宅の性能が一定の基準を満たしていることを証明します。
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">活用目的</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                        <li>既存住宅売買瑕疵保険の加入</li>
+                        <li>住宅ローン減税の適用（築年数要件の緩和）</li>
+                        <li>登録免許税・不動産取得税の軽減</li>
+                        <li>贈与税の非課税枠拡大</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* property_tax */}
+                {certificate.purposeType === 'property_tax' && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">制度概要</h4>
+                      <p className="text-sm text-gray-700">
+                        耐震改修工事を行った住宅について、固定資産税を一定期間減額する制度です。
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">適用要件</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+                        <li>昭和57年1月1日以前から存在する住宅であること</li>
+                        <li>現行の耐震基準に適合する耐震改修を行うこと</li>
+                        <li>工事費用が50万円を超えること</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-800 mb-2">減額内容</h4>
+                      <p className="text-sm text-gray-700">
+                        家屋の固定資産税額（120㎡相当分まで）の2分の1を、改修後一定期間減額します。
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </section>

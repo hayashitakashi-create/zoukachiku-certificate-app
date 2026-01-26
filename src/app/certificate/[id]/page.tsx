@@ -485,7 +485,7 @@ export default function CertificateDetailPage({
           </>
         }
       >
-      <div className="max-w-7xl">
+      <div className="max-w-7xl mx-auto">
         {/* ステータスとアクションボタン */}
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -1201,7 +1201,6 @@ export default function CertificateDetailPage({
           </div>
         </div>
       )}
-      </div>
       </Layout>
     </>
   );
