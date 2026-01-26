@@ -5,7 +5,12 @@
  * 詳細: /docs/excel-structure-analysis.md
  */
 
-import { Decimal } from '@prisma/client/runtime/library';
+/**
+ * Decimal型の定義（Prisma Decimal互換）
+ */
+type Decimal = {
+  toString(): string;
+};
 
 /**
  * 工事項目インターフェース

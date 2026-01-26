@@ -121,16 +121,22 @@ export default function CertificatePreviewPage() {
 
     return calculateOptimalCombination({
       seismic: seismicData?.summary ? {
+        totalCost: decimalToNumber(seismicData.summary.totalAmount),
+        afterSubsidy: decimalToNumber(seismicData.summary.totalAmount) - decimalToNumber(seismicData.summary.subsidyAmount),
         deductibleAmount: decimalToNumber(seismicData.summary.deductibleAmount),
         maxDeduction: Math.min(decimalToNumber(seismicData.summary.deductibleAmount), 2_500_000),
         excessAmount: Math.max(0, decimalToNumber(seismicData.summary.deductibleAmount) - 2_500_000),
       } : undefined,
       barrierFree: barrierFreeData?.summary ? {
+        totalCost: decimalToNumber(barrierFreeData.summary.totalAmount),
+        afterSubsidy: decimalToNumber(barrierFreeData.summary.totalAmount) - decimalToNumber(barrierFreeData.summary.subsidyAmount),
         deductibleAmount: decimalToNumber(barrierFreeData.summary.deductibleAmount),
         maxDeduction: Math.min(decimalToNumber(barrierFreeData.summary.deductibleAmount), 2_000_000),
         excessAmount: Math.max(0, decimalToNumber(barrierFreeData.summary.deductibleAmount) - 2_000_000),
       } : undefined,
       energy: energyData?.summary ? {
+        totalCost: decimalToNumber(energyData.summary.totalAmount),
+        afterSubsidy: decimalToNumber(energyData.summary.totalAmount) - decimalToNumber(energyData.summary.subsidyAmount),
         deductibleAmount: decimalToNumber(energyData.summary.deductibleAmount),
         maxDeduction: Math.min(
           decimalToNumber(energyData.summary.deductibleAmount),
@@ -142,16 +148,22 @@ export default function CertificatePreviewPage() {
         ),
       } : undefined,
       cohabitation: cohabitationData?.summary ? {
+        totalCost: decimalToNumber(cohabitationData.summary.totalAmount),
+        afterSubsidy: decimalToNumber(cohabitationData.summary.totalAmount) - decimalToNumber(cohabitationData.summary.subsidyAmount),
         deductibleAmount: decimalToNumber(cohabitationData.summary.deductibleAmount),
         maxDeduction: Math.min(decimalToNumber(cohabitationData.summary.deductibleAmount), 2_500_000),
         excessAmount: Math.max(0, decimalToNumber(cohabitationData.summary.deductibleAmount) - 2_500_000),
       } : undefined,
       childcare: childcareData?.summary ? {
+        totalCost: decimalToNumber(childcareData.summary.totalAmount),
+        afterSubsidy: decimalToNumber(childcareData.summary.totalAmount) - decimalToNumber(childcareData.summary.subsidyAmount),
         deductibleAmount: decimalToNumber(childcareData.summary.deductibleAmount),
         maxDeduction: Math.min(decimalToNumber(childcareData.summary.deductibleAmount), 2_500_000),
         excessAmount: Math.max(0, decimalToNumber(childcareData.summary.deductibleAmount) - 2_500_000),
       } : undefined,
       other: otherData?.summary ? {
+        totalCost: decimalToNumber(otherData.summary.totalAmount),
+        afterSubsidy: decimalToNumber(otherData.summary.totalAmount) - decimalToNumber(otherData.summary.subsidyAmount),
         deductibleAmount: decimalToNumber(otherData.summary.deductibleAmount),
         maxDeduction: decimalToNumber(otherData.summary.deductibleAmount),
         excessAmount: 0,
