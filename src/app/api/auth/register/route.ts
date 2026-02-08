@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     // レートリミットチェック（ブルートフォース防止）
     const ip = getClientIP(request);
-    const rateLimitResult = authLimiter.check(ip);
+    const rateLimitResult = await authLimiter.check(ip);
     if (!rateLimitResult.allowed) {
       return NextResponse.json(
         { error: 'リクエストが多すぎます。しばらく待ってから再試行してください。' },

@@ -5,14 +5,19 @@ import {
   calculateCohabitationAmount,
   calculateCohabitationDeductibleAmount,
 } from '@/lib/cohabitation-work-types';
+import { requireAuth } from '@/lib/auth-guard';
 import type { CohabitationCalculationResult } from '../types';
 
 /**
  * POST /api/cohabitation-works/calculate
- * 同居対応改修工事の金額を計算
+ * 同居対応改修工事の金額を計算（認証必須）
  */
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const body = await request.json();
 
     // バリデーション

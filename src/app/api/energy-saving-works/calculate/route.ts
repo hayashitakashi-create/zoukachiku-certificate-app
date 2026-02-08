@@ -6,14 +6,19 @@ import {
   calculateEnergySavingDeductibleAmount,
   hasSolarPowerWork,
 } from '@/lib/energy-saving-work-types';
+import { requireAuth } from '@/lib/auth-guard';
 import type { EnergySavingCalculationResult } from '../types';
 
 /**
  * POST /api/energy-saving-works/calculate
- * 省エネ改修工事の金額を計算
+ * 省エネ改修工事の金額を計算（認証必須）
  */
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const body = await request.json();
 
     // バリデーション

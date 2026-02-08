@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateSeismicRequestSchema } from '../types';
 import { SEISMIC_WORK_TYPES, calculateSeismicAmount, calculateDeductibleAmount } from '@/lib/seismic-work-types';
+import { requireAuth } from '@/lib/auth-guard';
 import type { SeismicCalculationResult } from '../types';
 
 /**
  * POST /api/seismic-works/calculate
- * 耐震改修工事の金額を計算
+ * 耐震改修工事の金額を計算（認証必須）
  */
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const body = await request.json();
 
     // バリデーション

@@ -1,26 +1,22 @@
 /**
- * インメモリ型APIレートリミッター
+ * APIレートリミッター
  *
- * トークンバケットアルゴリズムを使用。
- * 本番環境でスケールする場合はRedis等の外部ストアに置き換えること。
+ * Vercel KV（Redis）が設定されている場合はそちらを使用。
+ * 未設定の場合はインメモリにフォールバック（開発環境用）。
+ *
+ * Vercel KV を有効化するには:
+ *   1. Vercel ダッシュボード → Storage → KV Database を作成
+ *   2. 環境変数 KV_REST_API_URL, KV_REST_API_TOKEN が自動設定される
  *
  * 使い方:
- *   const limiter = createRateLimiter({ interval: 60_000, limit: 60 });
- *   const result = limiter.check(identifier);
+ *   const result = await apiLimiter.check(identifier);
  *   if (!result.allowed) return NextResponse.json(..., { status: 429 });
  */
 
-interface RateLimitEntry {
-  tokens: number;
-  lastRefill: number;
-}
+import { Ratelimit } from '@upstash/ratelimit';
+import { kv } from '@vercel/kv';
 
-interface RateLimitConfig {
-  /** リフィル間隔（ミリ秒）。デフォルト: 60秒 */
-  interval: number;
-  /** 間隔あたりの最大リクエスト数。デフォルト: 60 */
-  limit: number;
-}
+// ===== 型定義 =====
 
 interface RateLimitResult {
   allowed: boolean;
@@ -28,20 +24,52 @@ interface RateLimitResult {
   resetAt: number;
 }
 
-const DEFAULT_CONFIG: RateLimitConfig = {
-  interval: 60_000,  // 1分
-  limit: 60,         // 60リクエスト/分
-};
+interface RateLimiterInstance {
+  check(identifier: string): Promise<RateLimitResult>;
+}
 
-/**
- * レートリミッターを作成
- */
-export function createRateLimiter(config: Partial<RateLimitConfig> = {}) {
-  const { interval, limit } = { ...DEFAULT_CONFIG, ...config };
-  const store = new Map<string, RateLimitEntry>();
+// ===== KV接続判定 =====
+
+const isKvConfigured = !!(
+  process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN
+);
+
+// ===== Vercel KV版（本番用） =====
+
+function createKvRateLimiter(config: {
+  prefix: string;
+  limit: number;
+  window: string;
+}): RateLimiterInstance {
+  const limiter = new Ratelimit({
+    redis: kv,
+    limiter: Ratelimit.slidingWindow(config.limit, config.window as Parameters<typeof Ratelimit.slidingWindow>[1]),
+    prefix: `ratelimit:${config.prefix}`,
+  });
+
+  return {
+    async check(identifier: string): Promise<RateLimitResult> {
+      const result = await limiter.limit(identifier);
+      return {
+        allowed: result.success,
+        remaining: result.remaining,
+        resetAt: result.reset,
+      };
+    },
+  };
+}
+
+// ===== インメモリ版（開発環境フォールバック） =====
+
+function createMemoryRateLimiter(config: {
+  interval: number;
+  limit: number;
+}): RateLimiterInstance {
+  const { interval, limit } = config;
+  const store = new Map<string, { tokens: number; lastRefill: number }>();
 
   // 古いエントリを定期的にクリーンアップ（メモリリーク防止）
-  const CLEANUP_INTERVAL = 5 * 60_000; // 5分ごと
+  const CLEANUP_INTERVAL = 5 * 60_000;
   let lastCleanup = Date.now();
 
   function cleanup() {
@@ -57,56 +85,99 @@ export function createRateLimiter(config: Partial<RateLimitConfig> = {}) {
     }
   }
 
-  function check(identifier: string): RateLimitResult {
-    cleanup();
+  return {
+    async check(identifier: string): Promise<RateLimitResult> {
+      cleanup();
 
-    const now = Date.now();
-    const entry = store.get(identifier);
+      const now = Date.now();
+      const entry = store.get(identifier);
 
-    if (!entry) {
-      // 新規エントリ
-      store.set(identifier, { tokens: limit - 1, lastRefill: now });
-      return { allowed: true, remaining: limit - 1, resetAt: now + interval };
-    }
+      if (!entry) {
+        store.set(identifier, { tokens: limit - 1, lastRefill: now });
+        return { allowed: true, remaining: limit - 1, resetAt: now + interval };
+      }
 
-    // トークンをリフィル
-    const elapsed = now - entry.lastRefill;
-    const refillCount = Math.floor(elapsed / interval) * limit;
+      const elapsed = now - entry.lastRefill;
+      const refillCount = Math.floor(elapsed / interval) * limit;
 
-    if (refillCount > 0) {
-      entry.tokens = Math.min(limit, entry.tokens + refillCount);
-      entry.lastRefill = now;
-    }
+      if (refillCount > 0) {
+        entry.tokens = Math.min(limit, entry.tokens + refillCount);
+        entry.lastRefill = now;
+      }
 
-    if (entry.tokens > 0) {
-      entry.tokens -= 1;
+      if (entry.tokens > 0) {
+        entry.tokens -= 1;
+        return {
+          allowed: true,
+          remaining: entry.tokens,
+          resetAt: entry.lastRefill + interval,
+        };
+      }
+
       return {
-        allowed: true,
-        remaining: entry.tokens,
+        allowed: false,
+        remaining: 0,
         resetAt: entry.lastRefill + interval,
       };
-    }
+    },
+  };
+}
 
-    return {
-      allowed: false,
-      remaining: 0,
-      resetAt: entry.lastRefill + interval,
-    };
+// ===== ファクトリ =====
+
+function createRateLimiter(config: {
+  prefix: string;
+  limit: number;
+  intervalMs: number;
+  window: string;
+}): RateLimiterInstance {
+  if (isKvConfigured) {
+    return createKvRateLimiter({
+      prefix: config.prefix,
+      limit: config.limit,
+      window: config.window,
+    });
   }
 
-  return { check };
+  // KV未設定時はインメモリフォールバック（開発環境）
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(
+      `[rate-limit] KV未設定のためインメモリフォールバックを使用中 (${config.prefix})`
+    );
+  }
+  return createMemoryRateLimiter({
+    interval: config.intervalMs,
+    limit: config.limit,
+  });
 }
 
 // ===== プリセット =====
 
 /** 一般API用: 60リクエスト/分 */
-export const apiLimiter = createRateLimiter({ interval: 60_000, limit: 60 });
+export const apiLimiter = createRateLimiter({
+  prefix: 'api',
+  limit: 60,
+  intervalMs: 60_000,
+  window: '1 m',
+});
 
 /** 認証API用: 10リクエスト/分（ブルートフォース防止） */
-export const authLimiter = createRateLimiter({ interval: 60_000, limit: 10 });
+export const authLimiter = createRateLimiter({
+  prefix: 'auth',
+  limit: 10,
+  intervalMs: 60_000,
+  window: '1 m',
+});
 
 /** PDF生成用: 10リクエスト/分（負荷が高い処理） */
-export const pdfLimiter = createRateLimiter({ interval: 60_000, limit: 10 });
+export const pdfLimiter = createRateLimiter({
+  prefix: 'pdf',
+  limit: 10,
+  intervalMs: 60_000,
+  window: '1 m',
+});
+
+// ===== ヘルパー =====
 
 /**
  * リクエストからIPアドレスを取得
@@ -132,3 +203,9 @@ export function rateLimitHeaders(result: RateLimitResult): Record<string, string
     'X-RateLimit-Reset': String(Math.ceil(result.resetAt / 1000)),
   };
 }
+
+// テスト用エクスポート
+export { createMemoryRateLimiter as _createMemoryRateLimiterForTest };
+
+// 型エクスポート
+export type { RateLimitResult, RateLimiterInstance };

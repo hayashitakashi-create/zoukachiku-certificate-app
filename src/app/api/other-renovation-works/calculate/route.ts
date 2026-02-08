@@ -5,14 +5,19 @@ import {
   calculateOtherRenovationAmount,
   calculateOtherRenovationDeductibleAmount,
 } from '@/lib/other-renovation-work-types';
+import { requireAuth } from '@/lib/auth-guard';
 import type { OtherRenovationCalculationResult } from '../types';
 
 /**
  * POST /api/other-renovation-works/calculate
- * その他増改築工事の金額を計算
+ * その他増改築工事の金額を計算（認証必須）
  */
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const body = await request.json();
 
     // バリデーション

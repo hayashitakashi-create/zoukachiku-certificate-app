@@ -24,7 +24,7 @@ export async function GET(
 
     // レートリミット（PDF生成は負荷が高い）
     const ip = getClientIP(request);
-    const rateLimitResult = pdfLimiter.check(ip);
+    const rateLimitResult = await pdfLimiter.check(ip);
     if (!rateLimitResult.allowed) {
       return NextResponse.json(
         { success: false, error: 'PDF生成のリクエストが多すぎます。しばらく待ってから再試行してください。' },

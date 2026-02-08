@@ -5,14 +5,19 @@ import {
   calculateLongTermHousingAmount,
   calculateLongTermHousingDeductibleAmount,
 } from '@/lib/long-term-housing-work-types';
+import { requireAuth } from '@/lib/auth-guard';
 import type { LongTermHousingCalculationResult } from '../types';
 
 /**
  * POST /api/long-term-housing-works/calculate
- * 長期優良住宅化改修工事の金額を計算
+ * 長期優良住宅化改修工事の金額を計算（認証必須）
  */
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const body = await request.json();
 
     // バリデーション

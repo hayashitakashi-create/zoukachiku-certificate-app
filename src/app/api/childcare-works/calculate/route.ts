@@ -5,14 +5,19 @@ import {
   calculateChildcareAmount,
   calculateChildcareDeductibleAmount,
 } from '@/lib/childcare-work-types';
+import { requireAuth } from '@/lib/auth-guard';
 import type { ChildcareCalculationResult } from '../types';
 
 /**
  * POST /api/childcare-works/calculate
- * 子育て対応改修工事の金額を計算
+ * 子育て対応改修工事の金額を計算（認証必須）
  */
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const body = await request.json();
 
     // バリデーション
