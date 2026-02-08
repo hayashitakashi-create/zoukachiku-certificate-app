@@ -1,5 +1,5 @@
 /**
- * 固定資産税減額用PDF生成器
+ * 固定資産税減額用PDF生成器（ブラウザ対応版）
  * 公式テンプレートPDFのセクションIV（ページ17-21）を使用
  *
  * 固定資産税の減額対象:
@@ -16,10 +16,10 @@ import {
   loadTemplateWithFont,
   fillBasicInfo,
   fillIssuerInfo,
-  drawText,
   drawCheckmark,
   drawAmount,
-  savePdfToBuffer,
+  drawMultilineText,
+  savePdfToBytes,
   type CertificateBaseData,
 } from './pdfTemplateUtils';
 
@@ -103,11 +103,11 @@ const PROPERTY_TAX_COORDS = {
 } as const;
 
 /**
- * 固定資産税減額用PDF生成
+ * 固定資産税減額用PDF生成（ブラウザ対応版）
  */
 export async function generatePropertyTaxPDF(
   certificate: PropertyTaxData
-): Promise<Buffer> {
+): Promise<Uint8Array> {
   try {
     const { pdfDoc, pages, font } = await loadTemplateWithFont();
 
@@ -184,7 +184,6 @@ export async function generatePropertyTaxPDF(
     // 20ページ目：工事内容の説明
     // =======================================
     if (certificate.workDescription) {
-      const { drawMultilineText } = await import('./pdfTemplateUtils');
       drawMultilineText(page20, certificate.workDescription, PROPERTY_TAX_COORDS.page20.workDescription, font, {
         size: 8,
         lineHeight: 11,
@@ -198,9 +197,9 @@ export async function generatePropertyTaxPDF(
     // =======================================
     fillIssuerInfo(page22, certificate, font);
 
-    return await savePdfToBuffer(pdfDoc);
+    return await savePdfToBytes(pdfDoc);
   } catch (error) {
-    console.error('固定資産税PDF生成エラー:', error);
-    throw new Error('固定資産税減額用PDF生成に失敗しました: ' + (error as Error).message);
+    console.error('\u56FA\u5B9A\u8CC7\u7523\u7A0EPDF\u751F\u6210\u30A8\u30E9\u30FC:', error);
+    throw new Error('\u56FA\u5B9A\u8CC7\u7523\u7A0E\u6E1B\u984D\u7528PDF\u751F\u6210\u306B\u5931\u6557\u3057\u307E\u3057\u305F: ' + (error as Error).message);
   }
 }

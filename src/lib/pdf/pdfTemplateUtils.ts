@@ -1,5 +1,5 @@
 /**
- * PDF生成共通ユーティリティ
+ * PDF生成共通ユーティリティ（ブラウザ対応版）
  * 公式テンプレートPDFの読み込み、フォント埋め込み、描画ヘルパーを提供
  *
  * テンプレートPDF構造（23ページ）:
@@ -19,8 +19,6 @@
 
 import { PDFDocument, PDFPage, PDFFont, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import fs from 'fs';
-import path from 'path';
 
 export interface Coord {
   x: number;
@@ -35,27 +33,26 @@ export interface PdfContext {
 
 /**
  * テンプレートPDFを読み込み、日本語フォントを埋め込んだコンテキストを返す
+ * ブラウザ対応: fetch()でpublicディレクトリからファイルを取得
  */
 export async function loadTemplateWithFont(): Promise<PdfContext> {
-  const publicDir = path.join(process.cwd(), 'public');
-
-  // テンプレートPDF読み込み
-  const templatePath = path.join(publicDir, 'templates', 'housing-loan-certificate-template.pdf');
-  if (!fs.existsSync(templatePath)) {
-    throw new Error(`Template PDF not found at: ${templatePath}`);
+  // テンプレートPDF読み込み（publicディレクトリからfetch）
+  const templateResponse = await fetch('/templates/housing-loan-certificate-template.pdf');
+  if (!templateResponse.ok) {
+    throw new Error(`Template PDF not found: ${templateResponse.status}`);
   }
-  const templateBytes = fs.readFileSync(templatePath);
+  const templateBytes = await templateResponse.arrayBuffer();
   const pdfDoc = await PDFDocument.load(templateBytes);
 
   // fontkit登録
   pdfDoc.registerFontkit(fontkit);
 
   // 日本語フォント読み込み
-  const fontPath = path.join(publicDir, 'fonts', 'NotoSansJP.ttf');
-  if (!fs.existsSync(fontPath)) {
-    throw new Error(`Font file not found at: ${fontPath}`);
+  const fontResponse = await fetch('/fonts/NotoSansJP.ttf');
+  if (!fontResponse.ok) {
+    throw new Error(`Font file not found: ${fontResponse.status}`);
   }
-  const fontBytes = fs.readFileSync(fontPath);
+  const fontBytes = await fontResponse.arrayBuffer();
   const font = await pdfDoc.embedFont(fontBytes);
 
   const pages = pdfDoc.getPages();
@@ -90,7 +87,7 @@ export function drawCheckmark(
   coord: Coord,
   font: PDFFont
 ): void {
-  page.drawText('✓', {
+  page.drawText('\u2713', {
     x: coord.x + 1,
     y: coord.y - 2,
     size: 10,
@@ -233,13 +230,13 @@ export function fillBasicInfo(
 
   // 所在地
   const propertyText = certificate.propertyNumber
-    ? `${certificate.propertyNumber}　${certificate.propertyAddress}`
+    ? `${certificate.propertyNumber}\u3000${certificate.propertyAddress}`
     : certificate.propertyAddress;
   drawText(page, propertyText, BASE_COORDS.page1.propertyAddress, font);
 
   // 工事完了年月日
   const completionDate = new Date(certificate.completionDate);
-  const completionStr = `${completionDate.getFullYear()}年${completionDate.getMonth() + 1}月${completionDate.getDate()}日`;
+  const completionStr = `${completionDate.getFullYear()}\u5E74${completionDate.getMonth() + 1}\u6708${completionDate.getDate()}\u65E5`;
   drawText(page, completionStr, BASE_COORDS.page1.completionDate, font);
 }
 
@@ -285,9 +282,8 @@ export function fillIssuerInfo(
 }
 
 /**
- * PDFドキュメントをBufferとして保存
+ * PDFドキュメントをUint8Arrayとして保存
  */
-export async function savePdfToBuffer(pdfDoc: PDFDocument): Promise<Buffer> {
-  const pdfBytes = await pdfDoc.save();
-  return Buffer.from(pdfBytes);
+export async function savePdfToBytes(pdfDoc: PDFDocument): Promise<Uint8Array> {
+  return await pdfDoc.save();
 }

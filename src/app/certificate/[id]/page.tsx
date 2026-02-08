@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { certificateStore, type Certificate } from '@/lib/store';
+import { generateHousingLoanPDF } from '@/lib/housingLoanPdfGeneratorV2';
+import { generatePropertyTaxPDF } from '@/lib/pdf/propertyTaxPdfGenerator';
 
 export default function CertificateDetailPage({
   params,
@@ -17,6 +19,7 @@ export default function CertificateDetailPage({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [certificateId, setCertificateId] = useState<string>('');
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   useEffect(() => {
     const loadParams = async () => {
@@ -87,6 +90,101 @@ export default function CertificateDetailPage({
     } catch (err) {
       console.error('Failed to delete work:', err);
       alert('削除中にエラーが発生しました');
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!certificate) return;
+    setGeneratingPdf(true);
+    try {
+      const baseData = {
+        id: certificate.id,
+        applicantName: certificate.applicantName,
+        applicantAddress: certificate.applicantAddress,
+        propertyNumber: certificate.propertyNumber || null,
+        propertyAddress: certificate.propertyAddress,
+        completionDate: certificate.completionDate,
+        purposeType: certificate.purposeType,
+        subsidyAmount: certificate.subsidyAmount || 0,
+        issuerName: certificate.issuerName || null,
+        issuerOfficeName: certificate.issuerOfficeName || null,
+        issuerOrganizationType: certificate.issuerOrganizationType || null,
+        issuerQualificationNumber: certificate.issuerQualificationNumber || null,
+        issueDate: certificate.issueDate || null,
+        status: certificate.status,
+      };
+
+      let pdfBytes: Uint8Array;
+      let filePrefix: string;
+
+      switch (certificate.purposeType) {
+        case 'housing_loan': {
+          const detail = certificate.housingLoanDetail;
+          pdfBytes = await generateHousingLoanPDF({
+            ...baseData,
+            housingLoanDetail: detail ? {
+              id: certificate.id,
+              workTypes: detail.workTypes,
+              workDescription: detail.workDescription || null,
+              totalCost: detail.totalCost,
+              hasSubsidy: detail.subsidyAmount > 0,
+              subsidyAmount: detail.subsidyAmount,
+              deductibleAmount: detail.deductibleAmount,
+            } : null,
+          });
+          filePrefix = 'housing-loan';
+          break;
+        }
+        case 'property_tax': {
+          const works = certificate.works;
+          pdfBytes = await generatePropertyTaxPDF({
+            ...baseData,
+            seismic: works.seismic.summary ? {
+              totalAmount: works.seismic.summary.totalAmount,
+              subsidyAmount: works.seismic.summary.subsidyAmount,
+              deductibleAmount: works.seismic.summary.deductibleAmount,
+            } : undefined,
+            barrierFree: works.barrierFree.summary ? {
+              totalAmount: works.barrierFree.summary.totalAmount,
+              subsidyAmount: works.barrierFree.summary.subsidyAmount,
+              deductibleAmount: works.barrierFree.summary.deductibleAmount,
+            } : undefined,
+            energySaving: works.energySaving.summary ? {
+              totalAmount: works.energySaving.summary.totalAmount,
+              subsidyAmount: works.energySaving.summary.subsidyAmount,
+              deductibleAmount: works.energySaving.summary.deductibleAmount,
+              hasSolarPower: works.energySaving.summary.hasSolarPower || false,
+            } : undefined,
+            longTermHousing: works.longTermHousing.summary ? {
+              totalAmount: works.longTermHousing.summary.totalAmount,
+              subsidyAmount: works.longTermHousing.summary.subsidyAmount,
+              deductibleAmount: works.longTermHousing.summary.deductibleAmount,
+              isExcellentHousing: works.longTermHousing.summary.isExcellentHousing || false,
+            } : undefined,
+          });
+          filePrefix = 'property-tax';
+          break;
+        }
+        default:
+          alert(`${certificate.purposeType} タイプのPDF生成は現在準備中です`);
+          return;
+      }
+
+      // ブラウザでダウンロード
+      const blob = new Blob([new Uint8Array(pdfBytes) as BlobPart], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificate_${filePrefix}_${certificate.id}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      alert('PDF生成中にエラーが発生しました');
+    } finally {
+      setGeneratingPdf(false);
     }
   };
 
@@ -217,6 +315,13 @@ export default function CertificateDetailPage({
             >
               プレビュー
             </Link>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={generatingPdf}
+              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {generatingPdf ? 'PDF生成中...' : 'PDF'}
+            </button>
             <button
               onClick={() => window.print()}
               className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"

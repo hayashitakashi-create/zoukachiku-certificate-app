@@ -74,7 +74,7 @@ export async function GET(
       subsidyAmount: Number(certificate.subsidyAmount),
     };
 
-    let pdfBuffer: Buffer;
+    let pdfBuffer: Uint8Array;
     let filePrefix: string;
 
     switch (certificate.purposeType) {
@@ -157,7 +157,7 @@ export async function GET(
     const fileName = `certificate_${filePrefix}_${id}_${new Date().toISOString().slice(0, 10)}.pdf`;
 
     // PDFレスポンスを返す
-    return new NextResponse(new Uint8Array(pdfBuffer), {
+    return new NextResponse(Buffer.from(pdfBuffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
