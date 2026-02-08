@@ -1,13 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import Layout from '@/components/Layout';
-import type { LongTermHousingCalculationResult } from '@/app/api/long-term-housing-works/types';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { certificateStore, type StandardWorkItem, type WorkSummary } from '@/lib/store';
+import {
+  LONG_TERM_HOUSING_WORK_TYPES,
+  calculateLongTermHousingAmount,
+  calculateLongTermHousingTotal,
+  calculateLongTermHousingDeductibleAmount,
+} from '@/lib/long-term-housing-work-types';
 
 // フォームのスキーマ
 const longTermHousingFormSchema = z.object({
@@ -24,23 +29,16 @@ const longTermHousingFormSchema = z.object({
 
 type LongTermHousingFormData = z.infer<typeof longTermHousingFormSchema>;
 
-// カテゴリ別の工事種別データ型
-type WorkTypesByCategory = {
-  category: string;
-  works: Array<{
-    code: string;
-    name: string;
-    unitPrice: number;
-    unit: string;
-    description: string;
-  }>;
-};
+function LongTermHousingContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const certificateId = searchParams.get('certificateId');
 
-export default function LongTermHousingPage() {
-  const [calculationResult, setCalculationResult] = useState<LongTermHousingCalculationResult | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [workTypesByCategory, setWorkTypesByCategory] = useState<WorkTypesByCategory[]>([]);
-  const [allWorkTypes, setAllWorkTypes] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [certificateInfo, setCertificateInfo] = useState<{
+    applicantName: string;
+    propertyAddress: string;
+  } | null>(null);
 
   const {
     register,
@@ -62,65 +60,122 @@ export default function LongTermHousingPage() {
     name: 'works',
   });
 
-  // 工事種別データを取得
+  // 証明書情報をIndexedDBから取得
   useEffect(() => {
-    fetch('/api/long-term-housing-works/work-types')
-      .then((res) => res.json())
-      .then((result) => {
-        if (result.success) {
-          setAllWorkTypes(result.data.all);
-          setWorkTypesByCategory(result.data.byCategory);
-        }
-      })
-      .catch((error) => console.error('Error fetching work types:', error));
-  }, []);
+    if (certificateId) {
+      certificateStore.getCertificate(certificateId)
+        .then((cert) => {
+          if (cert) {
+            setCertificateInfo({
+              applicantName: cert.applicantName,
+              propertyAddress: cert.propertyAddress,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch certificate:', error);
+        });
+    }
+  }, [certificateId]);
 
   const onSubmit = async (data: LongTermHousingFormData) => {
-    setIsCalculating(true);
+    if (!certificateId) {
+      alert('証明書IDが指定されていません');
+      return;
+    }
+
+    setIsSaving(true);
     try {
-      const response = await fetch('/api/long-term-housing-works/calculate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
+      // クライアント側で計算
+      const items: StandardWorkItem[] = data.works.map((work) => {
+        const workType = LONG_TERM_HOUSING_WORK_TYPES.find((wt) => wt.code === work.workTypeCode);
+        const unitPrice = workType?.unitPrice || 0;
+        const amount = calculateLongTermHousingAmount(unitPrice, work.quantity, work.residentRatio);
+        return {
+          id: crypto.randomUUID(),
+          workTypeCode: work.workTypeCode,
+          workName: workType?.name || '',
+          category: workType?.category || '',
+          unitPrice,
+          unit: workType?.unit || '',
+          quantity: work.quantity,
+          residentRatio: work.residentRatio ?? 0,
+          calculatedAmount: amount,
+        };
       });
 
-      const result = await response.json();
+      const totalAmount = calculateLongTermHousingTotal(
+        items.map((item) => ({
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          residentRatio: item.residentRatio || undefined,
+        }))
+      );
 
-      if (result.success) {
-        setCalculationResult(result.data);
-      } else {
-        alert('計算エラー: ' + result.error);
-      }
+      const summary: WorkSummary = {
+        totalAmount,
+        subsidyAmount: data.subsidyAmount,
+        deductibleAmount: calculateLongTermHousingDeductibleAmount(totalAmount, data.subsidyAmount, data.isExcellentHousing),
+        isExcellentHousing: data.isExcellentHousing,
+      };
+
+      // IndexedDBに保存
+      await certificateStore.saveWorks(certificateId, 'longTermHousing', items, summary);
+      alert('工事データを保存しました');
+      router.push(`/certificate/${certificateId}`);
     } catch (error) {
-      console.error('Calculation error:', error);
-      alert('計算中にエラーが発生しました');
+      console.error('Save error:', error);
+      alert('保存中にエラーが発生しました');
     } finally {
-      setIsCalculating(false);
+      setIsSaving(false);
     }
   };
 
-  return (
-    <Layout
-      title="長期優良住宅化改修工事"
-      actions={
-        <Link
-          href="/certificate/create?step=3"
-          className="px-6 py-2.5 rounded-lg text-base font-medium transition-all duration-200 flex items-center gap-2"
-          style={{
-            backgroundColor: '#F1F5F9',
-            color: '#475569',
-          }}
-        >
-          <ArrowLeft className="w-5 h-5" />
-          証明者情報入力へ
-        </Link>
-      }
-    >
-      <div className="max-w-5xl">
+  // カテゴリ別にグループ化
+  const workTypesByCategory = LONG_TERM_HOUSING_WORK_TYPES.reduce((acc, workType) => {
+    const category = workType.category;
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(workType);
+    return acc;
+  }, {} as Record<string, typeof LONG_TERM_HOUSING_WORK_TYPES>);
 
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <h1 className="text-lg font-bold text-gray-900">長期優良住宅化改修工事</h1>
+          <Link
+            href={certificateId ? `/certificate/${certificateId}` : '/'}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            &larr; {certificateId ? '証明書詳細へ戻る' : '一覧へ戻る'}
+          </Link>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        {/* 証明書情報表示 */}
+        {certificateId && certificateInfo && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-blue-900 mb-2">証明書情報</h2>
+            <div className="text-sm text-blue-800 space-y-1">
+              <p><strong>申請者:</strong> {certificateInfo.applicantName}</p>
+              <p><strong>物件所在地:</strong> {certificateInfo.propertyAddress}</p>
+            </div>
+          </div>
+        )}
+
+        {!certificateId && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-800 text-sm">
+              証明書IDが指定されていません。証明書作成フローから開始してください。
+            </p>
+          </div>
+        )}
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
 
           <form onSubmit={handleSubmit(onSubmit)}>
@@ -141,27 +196,21 @@ export default function LongTermHousingPage() {
               </p>
             </div>
 
-            {/* 工事リスト */}
             <div className="space-y-6">
               {fields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className="border border-gray-200 rounded-lg p-4 relative"
-                >
-                  {/* 削除ボタン */}
+                <div key={field.id} className="border border-gray-200 rounded-lg p-4 relative">
                   {fields.length > 1 && (
                     <button
                       type="button"
                       onClick={() => remove(index)}
-                      className="absolute top-2 right-2 text-red-600 hover:text-red-800"
+                      className="absolute top-2 right-2 text-red-600 hover:text-red-800 text-sm"
                     >
-                      ✕ 削除
+                      削除
                     </button>
                   )}
 
                   <h3 className="font-medium mb-4">工事 #{index + 1}</h3>
 
-                  {/* 工事種別選択（カテゴリ別） */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       工事種別 *
@@ -171,28 +220,25 @@ export default function LongTermHousingPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-rose-500 focus:border-rose-500"
                     >
                       <option value="">選択してください</option>
-                      {workTypesByCategory.map((categoryData) => (
-                        <optgroup key={categoryData.category} label={categoryData.category}>
-                          {categoryData.works.map((workType) => (
+                      {Object.entries(workTypesByCategory).map(([category, works]) => (
+                        <optgroup key={category} label={category}>
+                          {works.map((workType) => (
                             <option key={workType.code} value={workType.code}>
-                              {workType.name} （{workType.unitPrice.toLocaleString()}円/{workType.unit}）
+                              {workType.name} ({workType.unitPrice.toLocaleString()}円/{workType.unit})
                             </option>
                           ))}
                         </optgroup>
                       ))}
                     </select>
                     {errors.works?.[index]?.workTypeCode && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.works[index]?.workTypeCode?.message}
-                      </p>
+                      <p className="mt-1 text-sm text-red-600">{errors.works[index]?.workTypeCode?.message}</p>
                     )}
                   </div>
 
-                  {/* 選択された工事種別の情報表示 */}
                   {watch(`works.${index}.workTypeCode`) && (
                     <div className="mb-4 p-3 bg-rose-50 rounded-md">
                       {(() => {
-                        const selectedWork = allWorkTypes.find(
+                        const selectedWork = LONG_TERM_HOUSING_WORK_TYPES.find(
                           (wt) => wt.code === watch(`works.${index}.workTypeCode`)
                         );
                         return selectedWork ? (
@@ -208,11 +254,8 @@ export default function LongTermHousingPage() {
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* 数量入力 */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        数量 *
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">数量 *</label>
                       <input
                         type="number"
                         step="0.01"
@@ -221,13 +264,10 @@ export default function LongTermHousingPage() {
                         placeholder="例: 10"
                       />
                       {errors.works?.[index]?.quantity && (
-                        <p className="mt-1 text-sm text-red-600">
-                          {errors.works[index]?.quantity?.message}
-                        </p>
+                        <p className="mt-1 text-sm text-red-600">{errors.works[index]?.quantity?.message}</p>
                       )}
                     </div>
 
-                    {/* 割合入力（オプション） */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         居住用部分の割合 (%) ※該当する場合のみ
@@ -237,36 +277,31 @@ export default function LongTermHousingPage() {
                         step="0.01"
                         {...register(`works.${index}.residentRatio`, { valueAsNumber: true })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-rose-500 focus:border-rose-500"
-                        placeholder="例: 80 （空欄可）"
+                        placeholder="例: 80 (空欄可)"
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         改修部分のうち、居住用以外の用途に供する部分がある場合に入力
                       </p>
                       {errors.works?.[index]?.residentRatio && (
-                        <p className="mt-1 text-sm text-red-600">
-                          {errors.works[index]?.residentRatio?.message}
-                        </p>
+                        <p className="mt-1 text-sm text-red-600">{errors.works[index]?.residentRatio?.message}</p>
                       )}
                     </div>
                   </div>
                 </div>
               ))}
 
-              {/* 工事追加ボタン */}
               <button
                 type="button"
                 onClick={() => append({ workTypeCode: '', quantity: 0, residentRatio: undefined })}
-                className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-rose-500 hover:text-rose-600 transition-colors"
+                className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600
+                           hover:border-rose-500 hover:text-rose-600 transition-colors"
               >
                 + 工事を追加
               </button>
             </div>
 
-            {/* 補助金入力 */}
             <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                補助金額 (円)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">補助金額 (円)</label>
               <input
                 type="number"
                 step="1"
@@ -275,107 +310,34 @@ export default function LongTermHousingPage() {
                 placeholder="例: 100000"
               />
               {errors.subsidyAmount && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.subsidyAmount.message}
-                </p>
+                <p className="mt-1 text-sm text-red-600">{errors.subsidyAmount.message}</p>
               )}
             </div>
 
-            {/* 計算ボタン */}
             <div className="mt-6">
               <button
                 type="submit"
-                disabled={isCalculating}
-                className="w-full bg-rose-600 text-white py-3 px-6 rounded-md hover:bg-rose-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
+                disabled={isSaving}
+                className="w-full bg-rose-600 text-white py-3 px-6 rounded-md hover:bg-rose-700
+                           disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
               >
-                {isCalculating ? '計算中...' : '金額を計算'}
+                {isSaving ? '保存中...' : '工事データを保存'}
               </button>
+              <p className="text-sm text-gray-600 text-center mt-2">
+                保存すると証明書に工事データが紐付けられます
+              </p>
             </div>
           </form>
         </div>
+      </main>
+    </div>
+  );
+}
 
-        {/* 計算結果表示 */}
-        {calculationResult && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">計算結果</h2>
-
-            {/* 各工事の明細（カテゴリ別） */}
-            <div className="mb-6">
-              <h3 className="font-medium mb-3">工事明細</h3>
-              <div className="space-y-2">
-                {calculationResult.works.map((work, index) => (
-                  <div
-                    key={index}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded"
-                  >
-                    <div>
-                      <p className="font-medium">{work.workName}</p>
-                      <p className="text-sm text-gray-600">
-                        [{work.category}] {work.unitPrice.toLocaleString()}円 × {work.quantity}{work.unit}
-                        {work.residentRatio && ` × ${work.residentRatio}%`}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-lg">
-                        {work.calculatedAmount.toLocaleString()}円
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* 合計・控除対象額 */}
-            <div className="border-t pt-4 space-y-2">
-              <div className="flex justify-between text-lg">
-                <span>合計金額:</span>
-                <span className="font-semibold">
-                  {calculationResult.totalAmount.toLocaleString()}円
-                </span>
-              </div>
-
-              {calculationResult.subsidyAmount > 0 && (
-                <div className="flex justify-between">
-                  <span>補助金額:</span>
-                  <span className="text-red-600">
-                    - {calculationResult.subsidyAmount.toLocaleString()}円
-                  </span>
-                </div>
-              )}
-
-              <div className="flex justify-between text-xl font-bold text-rose-600 pt-2 border-t">
-                <span>控除対象額:</span>
-                <span>{calculationResult.deductibleAmount.toLocaleString()}円</span>
-              </div>
-
-              {/* 長期優良住宅認定の表示 */}
-              {calculationResult.isExcellentHousing && (
-                <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded">
-                  <p className="text-sm text-rose-800">
-                    ⭐ 長期優良住宅の認定取得済み（控除対象額の上限: 500万円）
-                  </p>
-                </div>
-              )}
-
-              {!calculationResult.isExcellentHousing && calculationResult.deductibleAmount >= 2500000 && (
-                <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded">
-                  <p className="text-sm text-rose-800">
-                    ℹ️ 長期優良住宅化改修の控除対象額は最大250万円です（認定取得の場合は500万円）
-                  </p>
-                </div>
-              )}
-
-              {!calculationResult.isEligible && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-sm text-yellow-800">
-                    ⚠️ 控除対象額が50万円以下のため、減税対象外です
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </Layout>
+export default function LongTermHousingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">読み込み中...</div>}>
+      <LongTermHousingContent />
+    </Suspense>
   );
 }

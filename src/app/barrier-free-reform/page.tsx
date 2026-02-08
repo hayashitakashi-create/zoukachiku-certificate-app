@@ -5,10 +5,14 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import Layout from '@/components/Layout';
-import { BARRIER_FREE_WORK_TYPES, getBarrierFreeWorkTypesByCategory } from '@/lib/barrier-free-work-types';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { certificateStore, type StandardWorkItem, type WorkSummary } from '@/lib/store';
+import {
+  BARRIER_FREE_WORK_TYPES,
+  calculateBarrierFreeAmount,
+  calculateBarrierFreeTotal,
+  calculateBarrierFreeDeductibleAmount,
+} from '@/lib/barrier-free-work-types';
 
 // フォームのスキーマ
 const barrierFreeFormSchema = z.object({
@@ -26,10 +30,9 @@ type BarrierFreeFormData = z.infer<typeof barrierFreeFormSchema>;
 
 function BarrierFreeReformContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const certificateId = searchParams.get('certificateId');
 
-  const [calculationResult, setCalculationResult] = useState<any | null>(null);
-  const [isCalculating, setIsCalculating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [certificateInfo, setCertificateInfo] = useState<{
     applicantName: string;
@@ -55,16 +58,15 @@ function BarrierFreeReformContent() {
     name: 'works',
   });
 
-  // 証明書情報を取得
+  // 証明書情報をIndexedDBから取得
   useEffect(() => {
     if (certificateId) {
-      fetch(`/api/certificates/${certificateId}`)
-        .then((res) => res.json())
-        .then((result) => {
-          if (result.success) {
+      certificateStore.getCertificate(certificateId)
+        .then((cert) => {
+          if (cert) {
             setCertificateInfo({
-              applicantName: result.data.applicantName,
-              propertyAddress: result.data.propertyAddress,
+              applicantName: cert.applicantName,
+              propertyAddress: cert.propertyAddress,
             });
           }
         })
@@ -80,161 +82,133 @@ function BarrierFreeReformContent() {
       return;
     }
 
-    setIsCalculating(true);
     setIsSaving(true);
     try {
-      // 新しいAPI構造: 直接証明書に紐付けて保存
-      const worksData = data.works.map((work) => {
+      // クライアント側で計算
+      const items: StandardWorkItem[] = data.works.map((work) => {
         const workType = BARRIER_FREE_WORK_TYPES.find((wt) => wt.code === work.workTypeCode);
+        const unitPrice = workType?.unitPrice || 0;
+        const amount = calculateBarrierFreeAmount(unitPrice, work.quantity, work.ratio);
         return {
+          id: crypto.randomUUID(),
           workTypeCode: work.workTypeCode,
           workName: workType?.name || '',
-          category: workType?.category || '',
-          unitPrice: workType?.unitPrice || 0,
+          category: 'barrierFree',
+          unitPrice,
           unit: workType?.unit || '',
           quantity: work.quantity,
-          ratio: work.ratio,
+          residentRatio: work.ratio ?? 0,
+          calculatedAmount: amount,
         };
       });
 
-      const response = await fetch(`/api/certificates/${certificateId}/barrier-free`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          works: worksData,
-          subsidyAmount: data.subsidyAmount,
-        }),
-      });
+      const totalAmount = calculateBarrierFreeTotal(
+        items.map((item) => ({
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          ratio: item.residentRatio || undefined,
+        }))
+      );
 
-      const result = await response.json();
+      const summary: WorkSummary = {
+        totalAmount,
+        subsidyAmount: data.subsidyAmount,
+        deductibleAmount: calculateBarrierFreeDeductibleAmount(totalAmount, data.subsidyAmount),
+      };
 
-      if (result.success) {
-        setCalculationResult(result.data.calculation);
-        alert('工事データを保存しました');
-        // 証明書詳細ページへリダイレクト
-        window.location.href = `/certificate/${certificateId}`;
-      } else {
-        alert('保存エラー: ' + result.error);
-      }
+      // IndexedDBに保存
+      await certificateStore.saveWorks(certificateId, 'barrierFree', items, summary);
+      alert('工事データを保存しました');
+      router.push(`/certificate/${certificateId}`);
     } catch (error) {
       console.error('Save error:', error);
       alert('保存中にエラーが発生しました');
     } finally {
-      setIsCalculating(false);
       setIsSaving(false);
     }
   };
 
-  // カテゴリ別の工事種別を取得
-  const categoryMap = getBarrierFreeWorkTypesByCategory();
-  const workTypesByCategory = Array.from(categoryMap.entries()).map(([category, works]) => ({
-    category,
-    works,
-  }));
-
   return (
-    <Layout
-      title="バリアフリー改修工事"
-      actions={
-        <Link
-          href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=3'}
-          className="px-6 py-2.5 rounded-lg text-base font-medium transition-all duration-200 flex items-center gap-2"
-          style={{
-            backgroundColor: '#F1F5F9',
-            color: '#475569',
-          }}
-        >
-          <ArrowLeft className="w-5 h-5" />
-          {certificateId ? '証明書詳細へ戻る' : '証明者情報入力へ'}
-        </Link>
-      }
-    >
-      <div className="max-w-5xl">
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <h1 className="text-lg font-bold text-gray-900">バリアフリー改修工事</h1>
+          <Link
+            href={certificateId ? `/certificate/${certificateId}` : '/'}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            &larr; {certificateId ? '証明書詳細へ戻る' : '一覧へ戻る'}
+          </Link>
+        </div>
+      </header>
 
+      <main className="max-w-5xl mx-auto px-4 py-8">
         {/* 証明書情報表示 */}
         {certificateId && certificateInfo && (
-          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4 mb-6">
-            <h2 className="font-semibold text-green-900 mb-2">📋 証明書情報</h2>
-            <div className="text-sm text-green-800 space-y-1">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h2 className="font-semibold text-blue-900 mb-2">証明書情報</h2>
+            <div className="text-sm text-blue-800 space-y-1">
               <p><strong>申請者:</strong> {certificateInfo.applicantName}</p>
               <p><strong>物件所在地:</strong> {certificateInfo.propertyAddress}</p>
-              <p><strong>証明書ID:</strong> {certificateId}</p>
             </div>
           </div>
         )}
 
-        {/* certificateIdがない場合の警告 */}
         {!certificateId && (
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-yellow-800">
-              ⚠️ 証明書IDが指定されていません。証明書作成フローから開始してください。
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-800 text-sm">
+              証明書IDが指定されていません。証明書作成フローから開始してください。
             </p>
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
 
           <form onSubmit={handleSubmit(onSubmit)}>
-            {/* 工事リスト */}
             <div className="space-y-6">
               {fields.map((field, index) => (
-                <div
-                  key={field.id}
-                  className="border border-gray-200 rounded-lg p-4 relative"
-                >
-                  {/* 削除ボタン */}
+                <div key={field.id} className="border border-gray-200 rounded-lg p-4 relative">
                   {fields.length > 1 && (
                     <button
                       type="button"
                       onClick={() => remove(index)}
-                      className="absolute top-2 right-2 text-red-600 hover:text-red-800"
+                      className="absolute top-2 right-2 text-red-600 hover:text-red-800 text-sm"
                     >
-                      ✕ 削除
+                      削除
                     </button>
                   )}
 
                   <h3 className="font-medium mb-4">工事 #{index + 1}</h3>
 
-                  {/* 工事種別選択（カテゴリ別） */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       工事種別 *
                     </label>
                     <select
                       {...register(`works.${index}.workTypeCode`)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">選択してください</option>
-                      {workTypesByCategory.map((categoryData) => (
-                        <optgroup key={categoryData.category} label={categoryData.category}>
-                          {categoryData.works.map((workType) => (
-                            <option key={workType.code} value={workType.code}>
-                              {workType.name} （{workType.unitPrice.toLocaleString()}円/{workType.unit}）
-                            </option>
-                          ))}
-                        </optgroup>
+                      {BARRIER_FREE_WORK_TYPES.map((workType) => (
+                        <option key={workType.code} value={workType.code}>
+                          {workType.name} ({workType.unitPrice.toLocaleString()}円/{workType.unit})
+                        </option>
                       ))}
                     </select>
                     {errors.works?.[index]?.workTypeCode && (
-                      <p className="mt-1 text-sm text-red-600">
-                        {errors.works[index]?.workTypeCode?.message}
-                      </p>
+                      <p className="mt-1 text-sm text-red-600">{errors.works[index]?.workTypeCode?.message}</p>
                     )}
                   </div>
 
-                  {/* 選択された工事種別の情報表示 */}
                   {watch(`works.${index}.workTypeCode`) && (
-                    <div className="mb-4 p-3 bg-green-50 rounded-md">
+                    <div className="mb-4 p-3 bg-blue-50 rounded-md">
                       {(() => {
                         const selectedWork = BARRIER_FREE_WORK_TYPES.find(
                           (wt) => wt.code === watch(`works.${index}.workTypeCode`)
                         );
                         return selectedWork ? (
-                          <div className="text-sm text-green-800">
-                            <p><strong>カテゴリ:</strong> {selectedWork.category}</p>
+                          <div className="text-sm text-blue-800">
                             <p><strong>単価:</strong> {selectedWork.unitPrice.toLocaleString()}円</p>
                             <p><strong>単位:</strong> {selectedWork.unit}</p>
                             <p><strong>説明:</strong> {selectedWork.description}</p>
@@ -245,87 +219,65 @@ function BarrierFreeReformContent() {
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* 数量入力 */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        数量 *
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">数量 *</label>
                       <input
                         type="number"
                         step="0.01"
                         {...register(`works.${index}.quantity`, { valueAsNumber: true })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
-                        placeholder="例: 10"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="例: 100"
                       />
                       {errors.works?.[index]?.quantity && (
-                        <p className="mt-1 text-sm text-red-600">
-                          {errors.works[index]?.quantity?.message}
-                        </p>
+                        <p className="mt-1 text-sm text-red-600">{errors.works[index]?.quantity?.message}</p>
                       )}
                     </div>
 
-                    {/* 割合入力（オプション） */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        居住用部分の割合 (%) ※該当する場合のみ
+                        割合 (%) ※マンション等の場合のみ
                       </label>
                       <input
                         type="number"
                         step="0.01"
                         {...register(`works.${index}.ratio`, { valueAsNumber: true })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
-                        placeholder="例: 80 （空欄可）"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="例: 60 (空欄可)"
                       />
-                      <p className="mt-1 text-xs text-gray-500">
-                        改修部分のうち、居住用以外の用途に供する部分がある場合に入力
-                      </p>
-                      {errors.works?.[index]?.ratio && (
-                        <p className="mt-1 text-sm text-red-600">
-                          {errors.works[index]?.ratio?.message}
-                        </p>
-                      )}
                     </div>
                   </div>
                 </div>
               ))}
 
-              {/* 工事追加ボタン */}
               <button
                 type="button"
                 onClick={() => append({ workTypeCode: '', quantity: 0, ratio: undefined })}
-                className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600 hover:border-green-500 hover:text-green-600 transition-colors"
+                className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600
+                           hover:border-blue-500 hover:text-blue-600 transition-colors"
               >
                 + 工事を追加
               </button>
             </div>
 
-            {/* 補助金入力 */}
             <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                補助金額 (円)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">補助金額 (円)</label>
               <input
                 type="number"
                 step="1"
                 {...register('subsidyAmount', { valueAsNumber: true })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-green-500 focus:border-green-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 placeholder="例: 100000"
               />
-              {errors.subsidyAmount && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.subsidyAmount.message}
-                </p>
-              )}
             </div>
 
-            {/* 保存ボタン */}
             <div className="mt-6">
               <button
                 type="submit"
-                disabled={isCalculating || isSaving}
-                className="w-full bg-green-600 text-white py-3 px-6 rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
+                disabled={isSaving}
+                className="w-full bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700
+                           disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
               >
-                {isCalculating || isSaving ? '保存中...' : '✓ 工事データを証明書に保存'}
+                {isSaving ? '保存中...' : '工事データを保存'}
               </button>
               <p className="text-sm text-gray-600 text-center mt-2">
                 保存すると証明書に工事データが紐付けられます
@@ -333,8 +285,8 @@ function BarrierFreeReformContent() {
             </div>
           </form>
         </div>
-      </div>
-    </Layout>
+      </main>
+    </div>
   );
 }
 
