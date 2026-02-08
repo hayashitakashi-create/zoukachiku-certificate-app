@@ -6,20 +6,29 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-// Skip Prisma initialization during build time
+// Create Prisma client with connection pooling
 const createPrismaClient = () => {
-  if (process.env.SKIP_DB_INIT === 'true') {
-    return {} as PrismaClient;
+  // Prisma 7 requires adapter for PostgreSQL connections
+  // Prioritize POSTGRES_PRISMA_URL (Vercel) over DATABASE_URL
+  const connectionString =
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error(
+      'DATABASE_URL or POSTGRES_PRISMA_URL environment variable is not set. ' +
+      'Please configure your database connection.'
+    );
   }
 
-  // Prisma 7 requires adapter for PostgreSQL connections
-  const connectionString = process.env.DATABASE_URL!;
   const pool = new Pool({ connectionString });
   const adapter = new PrismaPg(pool);
 
   return new PrismaClient({
     adapter,
-    log: ['query', 'error', 'warn'],
+    log: process.env.NODE_ENV === 'development'
+      ? ['query', 'error', 'warn']
+      : ['error'],
   });
 };
 
