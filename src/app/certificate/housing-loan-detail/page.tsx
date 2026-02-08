@@ -22,6 +22,12 @@ import {
   defaultWork5,
   defaultWork6,
 } from '@/types/housingLoanDetail';
+import {
+  certificateStore,
+  type Certificate,
+  type HousingLoanDetail,
+  createEmptyHousingLoanDetail,
+} from '@/lib/store';
 
 function HousingLoanDetailContent() {
   const searchParams = useSearchParams();
@@ -55,13 +61,13 @@ function HousingLoanDetailContent() {
   // 証明書情報を取得
   useEffect(() => {
     if (certificateId) {
-      fetch(`/api/certificates/${certificateId}`)
-        .then((res) => res.json())
-        .then((result) => {
-          if (result.success) {
+      certificateStore
+        .getCertificate(certificateId)
+        .then((cert) => {
+          if (cert) {
             setCertificateInfo({
-              applicantName: result.data.applicantName,
-              propertyAddress: result.data.propertyAddress,
+              applicantName: cert.applicantName,
+              propertyAddress: cert.propertyAddress,
             });
           }
         })
@@ -74,18 +80,40 @@ function HousingLoanDetailContent() {
   // 既存の住宅借入金詳細データを取得してフォームに反映
   useEffect(() => {
     if (certificateId) {
-      fetch(`/api/housing-loan-detail?certificateId=${certificateId}`)
-        .then((res) => res.json())
-        .then((result) => {
-          if (result.success && result.data) {
-            // 既存データをフォームにセット
-            const data = result.data;
-            setValue('workTypes', data.workTypes || {});
-            setValue('workDescription', data.workDescription || '');
-            setValue('totalCost', data.totalCost || 0);
-            setValue('hasSubsidy', data.hasSubsidy || false);
-            setValue('subsidyAmount', data.subsidyAmount || 0);
-            console.log('既存データを読み込みました:', data);
+      certificateStore
+        .getCertificate(certificateId)
+        .then((cert) => {
+          if (cert && cert.housingLoanDetail) {
+            // Store形式からForm形式へマッピング
+            const detail = cert.housingLoanDetail;
+            const formWorkTypes: HousingLoanWorkTypes = {};
+
+            // 簡易マッピング: work1-work6のselectedフラグがtrueなら空のデフォルトオブジェクトをセット
+            if (detail.workTypes.work1?.selected) {
+              formWorkTypes.work1 = defaultWork1;
+            }
+            if (detail.workTypes.work2?.selected) {
+              formWorkTypes.work2 = defaultWork2;
+            }
+            if (detail.workTypes.work3?.selected) {
+              formWorkTypes.work3 = defaultWork3;
+            }
+            if (detail.workTypes.work4?.selected) {
+              formWorkTypes.work4 = defaultWork4;
+            }
+            if (detail.workTypes.work5?.selected) {
+              formWorkTypes.work5 = defaultWork5;
+            }
+            if (detail.workTypes.work6?.selected) {
+              formWorkTypes.work6 = defaultWork6;
+            }
+
+            setValue('workTypes', formWorkTypes);
+            setValue('workDescription', detail.workDescription || '');
+            setValue('totalCost', detail.totalCost || 0);
+            setValue('hasSubsidy', detail.hasSubsidy || false);
+            setValue('subsidyAmount', detail.subsidyAmount || 0);
+            console.log('既存データを読み込みました:', detail);
           } else {
             console.log('既存データが見つかりませんでした。新規作成モードです。');
           }
@@ -123,26 +151,39 @@ function HousingLoanDetailContent() {
 
     setIsSaving(true);
     try {
-      const response = await fetch('/api/housing-loan-detail', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Form形式からStore形式へマッピング
+      const housingLoanDetail: HousingLoanDetail = {
+        workTypes: {
+          work1: hasAnyWork1Selected(previewData.workTypes.work1)
+            ? { selected: true, description: '' }
+            : undefined,
+          work2: hasAnyWork2Selected(previewData.workTypes.work2)
+            ? { selected: true, description: '' }
+            : undefined,
+          work3: hasAnyWork3Selected(previewData.workTypes.work3)
+            ? { selected: true, description: '' }
+            : undefined,
+          work4: hasAnyWork4Selected(previewData.workTypes.work4)
+            ? { selected: true, description: '' }
+            : undefined,
+          work5: hasAnyWork5Selected(previewData.workTypes.work5)
+            ? { selected: true, description: '' }
+            : undefined,
+          work6: hasAnyWork6Selected(previewData.workTypes.work6)
+            ? { selected: true, description: '' }
+            : undefined,
         },
-        body: JSON.stringify({
-          certificateId,
-          ...previewData,
-          deductibleAmount,
-        }),
-      });
+        workDescription: previewData.workDescription || '',
+        totalCost: previewData.totalCost,
+        hasSubsidy: previewData.hasSubsidy,
+        subsidyAmount: previewData.subsidyAmount,
+        deductibleAmount,
+      };
 
-      const result = await response.json();
+      await certificateStore.saveHousingLoanDetail(certificateId, housingLoanDetail);
 
-      if (result.success) {
-        alert('住宅借入金等特別控除の詳細を保存しました');
-        router.push(`/certificate/${certificateId}`);
-      } else {
-        alert('保存エラー: ' + result.error);
-      }
+      alert('住宅借入金等特別控除の詳細を保存しました');
+      router.push(`/certificate/${certificateId}`);
     } catch (error) {
       console.error('Save error:', error);
       alert('保存中にエラーが発生しました');
@@ -154,6 +195,62 @@ function HousingLoanDetailContent() {
   const handleBackToEdit = () => {
     setShowPreview(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // 各工事種別に選択項目があるかチェックするヘルパー関数
+  const hasAnyWork1Selected = (work?: Work1Type): boolean => {
+    if (!work) return false;
+    return work.extension || work.renovation || work.majorRepair || work.majorRemodeling;
+  };
+
+  const hasAnyWork2Selected = (work?: Work2Type): boolean => {
+    if (!work) return false;
+    return work.floorOverHalf || work.stairOverHalf || work.partitionOverHalf || work.wallOverHalf;
+  };
+
+  const hasAnyWork3Selected = (work?: Work3Type): boolean => {
+    if (!work) return false;
+    return (
+      work.livingRoom ||
+      work.kitchen ||
+      work.bathroom ||
+      work.toilet ||
+      work.washroom ||
+      work.storage ||
+      work.entrance ||
+      work.corridor
+    );
+  };
+
+  const hasAnyWork4Selected = (work?: Work4Type): boolean => {
+    if (!work) return false;
+    return work.buildingStandard || work.earthquakeSafety;
+  };
+
+  const hasAnyWork5Selected = (work?: Work5Type): boolean => {
+    if (!work) return false;
+    return (
+      work.pathwayExpansion ||
+      work.stairSlope ||
+      work.bathroomImprovement ||
+      work.toiletImprovement ||
+      work.handrails ||
+      work.stepElimination ||
+      work.doorImprovement ||
+      work.floorSlipPrevention
+    );
+  };
+
+  const hasAnyWork6Selected = (work?: Work6Type): boolean => {
+    if (!work) return false;
+    // 第6号工事は複雑なので、主要フィールドのいずれかが設定されているかチェック
+    return !!(
+      work.energyEfficiency ||
+      work.lowCarbonCert ||
+      work.perfCert ||
+      work.energyEfficiency2 ||
+      work.longTermCert
+    );
   };
 
   return (
