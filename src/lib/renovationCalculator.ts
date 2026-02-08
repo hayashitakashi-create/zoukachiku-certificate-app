@@ -466,7 +466,7 @@ export function calculateOptimalCombination(
   let maxControlAmount = Math.max(pattern1_max, pattern2_max, pattern3_max);
 
   // ⑱ = MAX(⑧, ⑪, ⑭): 最大工事費
-  let totalDeductible = Math.max(pattern1_total, pattern2_total, pattern3_total);
+  const totalDeductible = Math.max(pattern1_total, pattern2_total, pattern3_total);
 
   // ⑲: ⑱に対応する超過額
   // ⑰の最大値がどのパターンから来たかに基づいて対応する超過額を選ぶ
