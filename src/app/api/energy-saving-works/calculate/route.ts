@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to calculate',
+        error: '計算処理に失敗しました',
       },
       { status: 500 }
     );

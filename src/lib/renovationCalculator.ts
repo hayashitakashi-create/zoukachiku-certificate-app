@@ -256,6 +256,66 @@ export function calculateChildcareRenovation(
 }
 
 /**
+ * 長期優良住宅化改修の控除額を計算
+ *
+ * 参照:
+ * - 長期優良住宅化（耐震又は省エネ）シート: Row 408-418
+ * - 長期優良住宅化（耐震及び省エネ）シート: Row 424-434
+ *
+ * **重要**:
+ * - 50万円超の場合のみ控除対象
+ * - 「耐震又は省エネ」(OR): 太陽光無=250万円、太陽光有=350万円
+ * - 「耐震及び省エネ」(AND): 太陽光無=500万円、太陽光有=600万円
+ *
+ * @param workItems 工事項目配列
+ * @param subsidyAmount 補助金額
+ * @param type 'or' = 耐震又は省エネ (⑤), 'and' = 耐震及び省エネ (⑥)
+ * @param hasSolarPanel 太陽光発電設備の有無
+ * @returns 計算結果
+ */
+export function calculateLongTermHousingRenovation(
+  workItems: WorkItem[],
+  subsidyAmount: number,
+  type: 'or' | 'and' = 'or',
+  hasSolarPanel: boolean = false
+): RenovationCalculation {
+  const totalCost = workItems.reduce((sum, item) => {
+    const residentRatio = item.residentRatio ?? 1.0;
+    const windowRatio = item.windowAreaRatio ?? 1.0;
+    const amount = item.unitPrice * item.quantity * residentRatio * windowRatio;
+    return sum + amount;
+  }, 0);
+
+  const afterSubsidy = totalCost - subsidyAmount;
+
+  // ウ = (ア-イ > 500,000) ? ア-イ : 0
+  // 50万円超の場合のみ対象
+  const deductibleAmount = afterSubsidy > 500_000 ? afterSubsidy : 0;
+
+  // エ: 上限額はtype×太陽光の組み合わせで決定
+  // OR(耐震又は省エネ): 太陽光無=250万円、太陽光有=350万円
+  // AND(耐震及び省エネ): 太陽光無=500万円、太陽光有=600万円
+  let limit: number;
+  if (type === 'or') {
+    limit = hasSolarPanel ? 3_500_000 : 2_500_000;
+  } else {
+    limit = hasSolarPanel ? 6_000_000 : 5_000_000;
+  }
+  const maxDeduction = Math.min(deductibleAmount, limit);
+
+  // オ = ウ - エ: 超過額
+  const excessAmount = Math.max(0, deductibleAmount - maxDeduction);
+
+  return {
+    totalCost: Math.round(totalCost),
+    afterSubsidy: Math.round(afterSubsidy),
+    deductibleAmount: Math.round(deductibleAmount),
+    maxDeduction: Math.round(maxDeduction),
+    excessAmount: Math.round(excessAmount),
+  };
+}
+
+/**
  * その他増改築の控除額を計算
  *
  * 参照: その他増改築シート L39, L41
@@ -305,7 +365,10 @@ export interface CombinedRenovations {
   cohabitation?: RenovationCalculation;
   childcare?: RenovationCalculation;
   other?: RenovationCalculation;
-  // TODO: 長期優良住宅化を追加
+  /** ⑤ 長期優良住宅化（耐震又は省エネ） */
+  longTermHousingOr?: RenovationCalculation;
+  /** ⑥ 長期優良住宅化（耐震及び省エネ） */
+  longTermHousingAnd?: RenovationCalculation;
 }
 
 export interface OptimalCombinationResult {
@@ -348,19 +411,73 @@ export function calculateOptimalCombination(
     (renovations.childcare?.excessAmount ?? 0);
 
   // ========================================
-  // TODO: パターン2、パターン3（長期優良住宅化の組み合わせ）
+  // パターン2: 長期優良住宅化OR（⑤）との組み合わせ（⑪、⑫、⑬）
+  // Excel Row 445-447
+  // ⑪ = ②ウ + ④ウ + ⑤ウ + ⑦ウ（バリアフリー + 同居対応 + 長期優良OR + 子育て）
   // ========================================
-  // 現時点では単純合計（パターン1のみ）で実装
+
+  const pattern2_total =
+    (renovations.barrierFree?.deductibleAmount ?? 0) +
+    (renovations.cohabitation?.deductibleAmount ?? 0) +
+    (renovations.longTermHousingOr?.deductibleAmount ?? 0) +
+    (renovations.childcare?.deductibleAmount ?? 0);
+
+  const pattern2_max =
+    (renovations.barrierFree?.maxDeduction ?? 0) +
+    (renovations.cohabitation?.maxDeduction ?? 0) +
+    (renovations.longTermHousingOr?.maxDeduction ?? 0) +
+    (renovations.childcare?.maxDeduction ?? 0);
+
+  const pattern2_excess =
+    (renovations.barrierFree?.excessAmount ?? 0) +
+    (renovations.cohabitation?.excessAmount ?? 0) +
+    (renovations.longTermHousingOr?.excessAmount ?? 0) +
+    (renovations.childcare?.excessAmount ?? 0);
+
+  // ========================================
+  // パターン3: 長期優良住宅化AND（⑥）との組み合わせ（⑭、⑮、⑯）
+  // Excel Row 448-450
+  // ⑭ = ②ウ + ④ウ + ⑥ウ + ⑦ウ（バリアフリー + 同居対応 + 長期優良AND + 子育て）
+  // ========================================
+
+  const pattern3_total =
+    (renovations.barrierFree?.deductibleAmount ?? 0) +
+    (renovations.cohabitation?.deductibleAmount ?? 0) +
+    (renovations.longTermHousingAnd?.deductibleAmount ?? 0) +
+    (renovations.childcare?.deductibleAmount ?? 0);
+
+  const pattern3_max =
+    (renovations.barrierFree?.maxDeduction ?? 0) +
+    (renovations.cohabitation?.maxDeduction ?? 0) +
+    (renovations.longTermHousingAnd?.maxDeduction ?? 0) +
+    (renovations.childcare?.maxDeduction ?? 0);
+
+  const pattern3_excess =
+    (renovations.barrierFree?.excessAmount ?? 0) +
+    (renovations.cohabitation?.excessAmount ?? 0) +
+    (renovations.longTermHousingAnd?.excessAmount ?? 0) +
+    (renovations.childcare?.excessAmount ?? 0);
+
+  // ========================================
+  // 最大値の選定（⑰、⑱、⑲）
+  // ========================================
 
   // ⑰ = MAX(⑨, ⑫, ⑮): 最大控除額（10%控除分）
-  // 現時点ではパターン1のみなので ⑰ = ⑨
-  let maxControlAmount = pattern1_max;
+  let maxControlAmount = Math.max(pattern1_max, pattern2_max, pattern3_max);
 
   // ⑱ = MAX(⑧, ⑪, ⑭): 最大工事費
-  let totalDeductible = pattern1_total;
+  let totalDeductible = Math.max(pattern1_total, pattern2_total, pattern3_total);
 
   // ⑲: ⑱に対応する超過額
-  let excessAmount = pattern1_excess;
+  // ⑰の最大値がどのパターンから来たかに基づいて対応する超過額を選ぶ
+  let excessAmount: number;
+  if (maxControlAmount === pattern3_max && pattern3_max > 0) {
+    excessAmount = pattern3_excess;
+  } else if (maxControlAmount === pattern2_max && pattern2_max > 0) {
+    excessAmount = pattern2_excess;
+  } else {
+    excessAmount = pattern1_excess;
+  }
 
   // ========================================
   // その他増改築との合算（Row 455-460）
@@ -369,8 +486,12 @@ export function calculateOptimalCombination(
   // ⑳ウ: その他増改築の控除対象額
   const otherDeductible = renovations.other?.deductibleAmount ?? 0;
 
-  // ㉑ = ⑱ + ⑳ウ: 最終控除対象額（改修工事とその他増改築の合算）
-  const finalDeductible = totalDeductible + otherDeductible;
+  // ㉑ = MIN(⑱, ⑲ + ⑳ウ): 最終控除対象額
+  // Excel: =IF(OR(AQ452>0,AQ453+AQ458>0),MIN(AQ452,AQ453+AQ458),"")
+  // ⑱（最大工事費）と（⑲超過額 + ⑳ウその他増改築）の小さい方
+  const finalDeductible = (totalDeductible > 0 || (excessAmount + otherDeductible) > 0)
+    ? Math.min(totalDeductible, excessAmount + otherDeductible)
+    : 0;
 
   // ========================================
   // 1,000万円上限適用

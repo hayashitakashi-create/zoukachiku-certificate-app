@@ -469,9 +469,46 @@ export default function CertificateCreatePage() {
     }
 
     // 住宅借入金等特別控除の場合、工事費用が100万円以上かチェック
-    // TODO: 実際の工事データを取得して検証
-    // 現在は警告のみ表示
-    if (formData.purposeType === 'housing_loan') {
+    if (formData.purposeType === 'housing_loan' && certificateId) {
+      try {
+        const response = await fetch(
+          `/api/housing-loan-detail?certificateId=${certificateId}`
+        );
+        if (response.ok) {
+          const result = await response.json();
+          if (result.data) {
+            const deductibleAmount = Number(result.data.deductibleAmount);
+            if (deductibleAmount < 1_000_000) {
+              alert(
+                `住宅借入金等特別控除を適用するには、補助金控除後の工事費用が100万円以上である必要があります。\n` +
+                `現在の控除対象額: ${deductibleAmount.toLocaleString()}円\n\n` +
+                `工事データを確認・修正してください。`
+              );
+              return;
+            }
+          } else {
+            // 工事データが未入力
+            const confirmed = confirm(
+              '住宅借入金等特別控除の工事詳細データが入力されていません。\n' +
+              '工事データ未入力のまま発行しますか？'
+            );
+            if (!confirmed) {
+              return;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Housing loan detail fetch error:', error);
+        // フェッチ失敗時は警告を表示して続行可能にする
+        const confirmed = confirm(
+          '工事データの検証中にエラーが発生しました。\n' +
+          'このまま発行しますか？'
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+    } else if (formData.purposeType === 'housing_loan' && !certificateId) {
       const confirmed = confirm(
         '注意: 住宅借入金等特別控除を適用するには、補助金控除後の工事費用が100万円以上である必要があります。\n' +
         '工事データを入力済みで、合計金額が要件を満たしていることを確認してください。\n\n' +

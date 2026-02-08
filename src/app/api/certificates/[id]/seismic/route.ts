@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-guard';
 import {
   calculateSeismicRenovation,
   type WorkItem,
@@ -9,14 +10,26 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/certificates/:id/seismic
- * 耐震改修工事の取得
+ * 耐震改修工事の取得（認証必須）
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const { id } = await params;
+
+    // 証明書の所有権確認
+    const certificate = await prisma.certificate.findUnique({ where: { id } });
+    if (!certificate) {
+      return NextResponse.json({ success: false, error: 'Certificate not found' }, { status: 404 });
+    }
+    if (authResult.role !== 'admin' && certificate.userId !== authResult.userId) {
+      return NextResponse.json({ success: false, error: 'この証明書へのアクセス権がありません' }, { status: 403 });
+    }
 
     const works = await prisma.seismicWork.findMany({
       where: { certificateId: id },
@@ -55,6 +68,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const { id } = await params;
 
     // 証明書の存在確認
@@ -70,6 +86,11 @@ export async function POST(
         },
         { status: 404 }
       );
+    }
+
+    // アクセス制御
+    if (authResult.role !== 'admin' && certificate.userId !== authResult.userId) {
+      return NextResponse.json({ success: false, error: 'この証明書へのアクセス権がありません' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -162,7 +183,7 @@ export async function POST(
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to save seismic renovation data: ' + (error as Error).message,
+        error: '耐震改修工事データの保存に失敗しました',
       },
       { status: 500 }
     );
@@ -178,7 +199,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const { id } = await params;
+
+    // 証明書の所有権確認
+    const certificate = await prisma.certificate.findUnique({ where: { id } });
+    if (!certificate) {
+      return NextResponse.json({ success: false, error: 'Certificate not found' }, { status: 404 });
+    }
+    if (authResult.role !== 'admin' && certificate.userId !== authResult.userId) {
+      return NextResponse.json({ success: false, error: 'この証明書へのアクセス権がありません' }, { status: 403 });
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.seismicWork.deleteMany({

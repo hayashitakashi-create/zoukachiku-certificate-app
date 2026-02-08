@@ -15,6 +15,15 @@ const createPrismaClient = () => {
     process.env.DATABASE_URL;
 
   if (!connectionString) {
+    // ビルド時（next build）にはDB接続不要のため、エラーを投げずにログのみ
+    if (process.env.NODE_ENV === 'production' || process.env.NEXT_PHASE === 'phase-production-build') {
+      console.warn(
+        'DATABASE_URL is not set. Prisma client will not be available. ' +
+        'This is expected during build phase.'
+      );
+      // ビルド時はダミーのPrismaClientを返す（実際のDB操作は行わない）
+      return new PrismaClient();
+    }
     throw new Error(
       'DATABASE_URL or POSTGRES_PRISMA_URL environment variable is not set. ' +
       'Please configure your database connection.'

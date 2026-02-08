@@ -9,9 +9,81 @@ datasource db {
   provider = "postgresql"
 }
 
+// =============================================
+// 認証・認可（NextAuth.js / Auth.js）
+// =============================================
+
+// ユーザー
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?   // Credentials Provider 用（bcryptハッシュ）
+  image         String?
+  role          String    @default("architect") // 'admin' | 'architect'
+
+  accounts      Account[]
+  sessions      Session[]
+  certificates  Certificate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// OAuth アカウント（GitHub, Google等）
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// セッション
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// メール確認トークン
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// =============================================
+// 業務データ
+// =============================================
+
 // 証明書（メインテーブル）
 model Certificate {
   id        String   @id @default(uuid())
+
+  // 作成者
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   // 基本情報
   applicantName    String   // 証明申請者の氏名
@@ -49,6 +121,7 @@ model Certificate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([userId])
   @@index([status])
   @@index([createdAt])
 }

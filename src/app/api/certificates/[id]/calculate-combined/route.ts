@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-guard';
 import {
   calculateOptimalCombination,
   type CombinedRenovations,
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/certificates/:id/calculate-combined
- * 複数の改修種別を統合計算し、最適な組み合わせを返す
+ * 複数の改修種別を統合計算し、最適な組み合わせを返す（認証必須）
  *
  * Excel参照: メイン証明書シート Row 442-460
  * - 各改修種別の結果を集約
@@ -23,6 +24,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const { id } = await params;
 
     // 証明書の存在確認
@@ -40,6 +44,11 @@ export async function GET(
       );
     }
 
+    // アクセス制御
+    if (authResult.role !== 'admin' && certificate.userId !== authResult.userId) {
+      return NextResponse.json({ success: false, error: 'この証明書へのアクセス権がありません' }, { status: 403 });
+    }
+
     // 各改修種別のサマリーを取得
     const [
       seismicSummary,
@@ -48,6 +57,7 @@ export async function GET(
       cohabitationSummary,
       childcareSummary,
       otherRenovationSummary,
+      longTermHousingSummary,
     ] = await Promise.all([
       prisma.seismicSummary.findUnique({ where: { certificateId: id } }),
       prisma.barrierFreeSummary.findUnique({ where: { certificateId: id } }),
@@ -55,6 +65,7 @@ export async function GET(
       prisma.cohabitationSummary.findUnique({ where: { certificateId: id } }),
       prisma.childcareSummary.findUnique({ where: { certificateId: id } }),
       prisma.otherRenovationSummary.findUnique({ where: { certificateId: id } }),
+      prisma.longTermHousingSummary.findUnique({ where: { certificateId: id } }),
     ]);
 
     // 各改修種別の計算結果をRenovationCalculation形式に変換
@@ -173,6 +184,45 @@ export async function GET(
       };
     }
 
+    if (longTermHousingSummary) {
+      const totalCost = decimalToNumber(longTermHousingSummary.totalAmount);
+      const subsidyAmount = decimalToNumber(longTermHousingSummary.subsidyAmount);
+      const afterSubsidy = totalCost - subsidyAmount;
+      const isExcellentHousing = longTermHousingSummary.isExcellentHousing;
+
+      // ウ = (ア-イ > 500,000) ? ア-イ : 0
+      const deductibleAmount = afterSubsidy > 500_000 ? afterSubsidy : 0;
+
+      // 太陽光の有無は省エネサマリーから取得
+      const hasSolarPower = energySummary?.hasSolarPower ?? false;
+
+      if (isExcellentHousing) {
+        // ⑥ 耐震及び省エネ（AND）: 太陽光無=500万円、太陽光有=600万円
+        const limit = hasSolarPower ? 6_000_000 : 5_000_000;
+        const maxDeduction = Math.min(deductibleAmount, limit);
+
+        renovations.longTermHousingAnd = {
+          totalCost,
+          afterSubsidy,
+          deductibleAmount,
+          maxDeduction,
+          excessAmount: Math.max(0, deductibleAmount - maxDeduction),
+        };
+      } else {
+        // ⑤ 耐震又は省エネ（OR）: 太陽光無=250万円、太陽光有=350万円
+        const limit = hasSolarPower ? 3_500_000 : 2_500_000;
+        const maxDeduction = Math.min(deductibleAmount, limit);
+
+        renovations.longTermHousingOr = {
+          totalCost,
+          afterSubsidy,
+          deductibleAmount,
+          maxDeduction,
+          excessAmount: Math.max(0, deductibleAmount - maxDeduction),
+        };
+      }
+    }
+
     // Excel Row 442-460: 最適な組み合わせを計算
     const optimalCombination = calculateOptimalCombination(renovations);
 
@@ -216,7 +266,7 @@ export async function GET(
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to calculate combined renovations: ' + (error as Error).message,
+        error: '統合計算に失敗しました',
       },
       { status: 500 }
     );

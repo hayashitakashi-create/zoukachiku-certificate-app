@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-guard';
 import { createCertificateRequestSchema } from './types';
 import type { CertificateResponse, CertificateListResponse } from './types';
 
@@ -8,17 +9,24 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/certificates
- * 証明書一覧を取得
+ * 証明書一覧を取得（認証必須）
  */
 export async function GET(request: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // フィルタ条件
+    // フィルタ条件（自分の証明書のみ表示。管理者は全件表示）
     const where: any = {};
+    if (authResult.role !== 'admin') {
+      where.userId = authResult.userId;
+    }
     if (status) {
       where.status = status;
     }
@@ -74,10 +82,14 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/certificates
- * 新規証明書を作成
+ * 新規証明書を作成（認証必須）
  */
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const body = await request.json();
 
     // バリデーション
@@ -95,9 +107,10 @@ export async function POST(request: NextRequest) {
 
     const data = validationResult.data;
 
-    // 証明書を作成
+    // 証明書を作成（作成者を紐付け）
     const certificate = await prisma.certificate.create({
       data: {
+        userId: authResult.userId,
         applicantName: data.applicantName,
         applicantAddress: data.applicantAddress,
         propertyNumber: data.propertyNumber || null,
@@ -145,7 +158,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to create certificate',
+        error: '証明書の作成に失敗しました',
       },
       { status: 500 }
     );

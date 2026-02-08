@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-guard';
 import { z } from 'zod';
 
 // 工事データの保存スキーマ
@@ -20,10 +21,13 @@ const saveSeismicWorksSchema = z.object({
 
 /**
  * POST /api/seismic-works
- * 耐震改修工事データを証明書に保存
+ * 耐震改修工事データを証明書に保存（認証必須）
  */
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const body = await request.json();
 
     // バリデーション
@@ -54,6 +58,11 @@ export async function POST(request: NextRequest) {
         },
         { status: 404 }
       );
+    }
+
+    // アクセス制御
+    if (authResult.role !== 'admin' && certificate.userId !== authResult.userId) {
+      return NextResponse.json({ success: false, error: 'この証明書へのアクセス権がありません' }, { status: 403 });
     }
 
     // 既存の耐震改修工事データを削除（上書き保存）
@@ -88,7 +97,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to save seismic works',
+        error: '耐震改修工事データの保存に失敗しました',
       },
       { status: 500 }
     );

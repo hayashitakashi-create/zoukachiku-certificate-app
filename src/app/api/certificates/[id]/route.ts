@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth-guard';
 import { updateCertificateRequestSchema } from '../types';
 import type { CertificateResponse } from '../types';
 
@@ -8,13 +9,17 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/certificates/:id
- * 特定の証明書を取得
+ * 特定の証明書を取得（認証必須）
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const { id } = await params;
 
     const certificate = await prisma.certificate.findUnique({
@@ -38,6 +43,14 @@ export async function GET(
           error: 'Certificate not found',
         },
         { status: 404 }
+      );
+    }
+
+    // アクセス制御: 自分の証明書か管理者のみ閲覧可
+    if (authResult.role !== 'admin' && certificate.userId !== authResult.userId) {
+      return NextResponse.json(
+        { success: false, error: 'この証明書へのアクセス権がありません' },
+        { status: 403 }
       );
     }
 
@@ -138,13 +151,17 @@ export async function GET(
 
 /**
  * PUT /api/certificates/:id
- * 証明書を更新
+ * 証明書を更新（認証必須）
  */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const { id } = await params;
     const body = await request.json();
 
@@ -175,6 +192,14 @@ export async function PUT(
           error: 'Certificate not found',
         },
         { status: 404 }
+      );
+    }
+
+    // アクセス制御
+    if (authResult.role !== 'admin' && existingCertificate.userId !== authResult.userId) {
+      return NextResponse.json(
+        { success: false, error: 'この証明書を編集する権限がありません' },
+        { status: 403 }
       );
     }
 
@@ -230,7 +255,7 @@ export async function PUT(
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to update certificate',
+        error: '証明書の更新に失敗しました',
       },
       { status: 500 }
     );
@@ -239,13 +264,17 @@ export async function PUT(
 
 /**
  * DELETE /api/certificates/:id
- * 証明書を削除
+ * 証明書を削除（認証必須）
  */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 認証チェック
+    const authResult = await requireAuth();
+    if (!authResult.authorized) return authResult.response;
+
     const { id } = await params;
 
     // 証明書が存在するか確認
@@ -260,6 +289,14 @@ export async function DELETE(
           error: 'Certificate not found',
         },
         { status: 404 }
+      );
+    }
+
+    // アクセス制御
+    if (authResult.role !== 'admin' && existingCertificate.userId !== authResult.userId) {
+      return NextResponse.json(
+        { success: false, error: 'この証明書を削除する権限がありません' },
+        { status: 403 }
       );
     }
 
