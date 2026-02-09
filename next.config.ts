@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  // bcryptjsをTurbopackバンドルから除外（サーバー側でNode.jsネイティブ実行）
+  serverExternalPackages: ['bcryptjs'],
   // セキュリティヘッダー
   async headers() {
     return [

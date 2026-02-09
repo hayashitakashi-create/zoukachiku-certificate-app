@@ -25,11 +25,19 @@ export default function LoginPage() {
         redirect: false,
       });
 
-      if (result?.error) {
+      if (result?.error && result?.status !== 200) {
         setError('メールアドレスまたはパスワードが正しくありません');
       } else {
-        router.push('/');
-        router.refresh();
+        // Auth.js v5 beta ではCredentials成功時もerrorが返る場合がある
+        // セッション確認で実際のログイン状態を判定
+        const sessionRes = await fetch('/api/auth/session');
+        const session = await sessionRes.json();
+        if (session?.user) {
+          router.push('/');
+          router.refresh();
+        } else {
+          setError('メールアドレスまたはパスワードが正しくありません');
+        }
       }
     } catch {
       setError('ログイン中にエラーが発生しました');
@@ -159,6 +167,7 @@ export default function LoginPage() {
               ユーザー登録
             </Link>
           </div>
+
         </div>
       </div>
     </div>
