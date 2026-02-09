@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import { certificateStore, type Certificate } from '@/lib/store';
 
 // 用途ラベル
@@ -20,6 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function HomePage() {
+  const { data: session } = useSession();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -80,9 +81,9 @@ export default function HomePage() {
       {/* ヘッダー */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-gray-900">
+          <Link href="/" className="text-lg font-bold text-gray-900 hover:text-blue-600 transition-colors">
             増改築等工事証明書
-          </h1>
+          </Link>
           <div className="flex items-center gap-3">
             <button
               onClick={handleExport}
@@ -98,12 +99,27 @@ export default function HomePage() {
             >
               インポート
             </button>
-            <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
+            <Link
+              href="/settings"
               className="text-sm text-gray-500 hover:text-gray-700"
             >
-              ログアウト
-            </button>
+              設定
+            </Link>
+            {session?.user ? (
+              <button
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                ログアウト
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                ログイン
+              </Link>
+            )}
           </div>
         </div>
       </header>

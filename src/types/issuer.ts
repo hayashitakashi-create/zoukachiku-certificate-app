@@ -107,6 +107,16 @@ export function getOrganizationTypeLabel(type: string): string {
   return labels[type] || '';
 }
 
+// 事務所種別の日本語名を取得
+export function getOfficeTypeLabel(officeType: string): string {
+  const labels: Record<string, string> = {
+    first_class: '一級建築士事務所',
+    second_class: '二級建築士事務所',
+    wooden: '木造建築士事務所',
+  };
+  return labels[officeType] || '';
+}
+
 // 建築士資格種別の日本語名を取得
 export function getArchitectQualificationLabel(qualification: ArchitectQualification): string {
   const labels: Record<ArchitectQualification, string> = {

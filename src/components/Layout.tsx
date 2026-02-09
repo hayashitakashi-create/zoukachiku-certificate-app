@@ -51,9 +51,9 @@ export default function Layout({ children, title, actions }: LayoutProps) {
       >
         {/* ロゴエリア */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold whitespace-nowrap" style={{ color: '#1D1D1F' }}>
+          <Link href="/" className="text-2xl font-bold whitespace-nowrap block hover:opacity-70 transition-opacity" style={{ color: '#1D1D1F' }}>
             増改築等工事証明書
-          </h1>
+          </Link>
           <p className="text-base mt-1" style={{ color: '#86868B' }}>
             管理システム
           </p>

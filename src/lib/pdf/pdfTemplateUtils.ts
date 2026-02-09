@@ -19,6 +19,8 @@
 
 import { PDFDocument, PDFPage, PDFFont, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
+import type { IssuerInfo } from '@/types/issuer';
+import { getOfficeTypeLabel, getArchitectQualificationLabel, getOrganizationTypeLabel } from '@/types/issuer';
 
 export interface Coord {
   x: number;
@@ -191,6 +193,7 @@ export interface CertificateBaseData {
   issuerQualificationNumber: string | null;
   issueDate: string | null;
   status: string;
+  issuerInfo?: IssuerInfo | null;
 }
 
 /**
@@ -208,9 +211,14 @@ export const BASE_COORDS = {
     issueDateMonth: { x: 225, y: 717 },
     issueDateDay: { x: 271, y: 717 },
     issuerName: { x: 230, y: 640 },
+    architectQualification: { x: 230, y: 620 },
     registrationNumber: { x: 450, y: 605 },
+    registrationPrefecture: { x: 230, y: 605 },
     officeName: { x: 230, y: 530 },
+    officeAddress: { x: 230, y: 510 },
     officeType: { x: 385, y: 470 },
+    officeRegistrationDate: { x: 230, y: 450 },
+    officeRegistrationNumber: { x: 400, y: 450 },
   },
 } as const;
 
@@ -242,42 +250,99 @@ export function fillBasicInfo(
 
 /**
  * 証明者情報（ページ22）を記入する共通処理
+ * issuerInfo（リッチデータ）がある場合はそちらを優先し、なければフラットフィールドでフォールバック
  */
 export function fillIssuerInfo(
   page: PDFPage,
   certificate: CertificateBaseData,
   font: PDFFont
 ): void {
+  const coords = BASE_COORDS.page22;
+
   // 証明年月日
   if (certificate.issueDate) {
     drawDate(
       page,
       certificate.issueDate,
-      BASE_COORDS.page22.issueDateYear,
-      BASE_COORDS.page22.issueDateMonth,
-      BASE_COORDS.page22.issueDateDay,
+      coords.issueDateYear,
+      coords.issueDateMonth,
+      coords.issueDateDay,
       font
     );
   }
 
-  // 建築士 氏名
-  if (certificate.issuerName) {
-    drawText(page, certificate.issuerName, BASE_COORDS.page22.issuerName, font);
-  }
+  const info = certificate.issuerInfo;
 
-  // 登録番号
-  if (certificate.issuerQualificationNumber) {
-    drawText(page, certificate.issuerQualificationNumber, BASE_COORDS.page22.registrationNumber, font);
-  }
+  if (info && info.organizationType === 'registered_architect_office') {
+    // --- リッチデータ: 登録建築士事務所に属する建築士 ---
 
-  // 事務所名称
-  if (certificate.issuerOfficeName) {
-    drawText(page, certificate.issuerOfficeName, BASE_COORDS.page22.officeName, font);
-  }
+    // 建築士 氏名
+    if (info.architectName) {
+      drawText(page, info.architectName, coords.issuerName, font);
+    }
 
-  // 事務所種別
-  if (certificate.issuerOrganizationType) {
-    drawText(page, certificate.issuerOrganizationType, BASE_COORDS.page22.officeType, font);
+    // 建築士資格種別（一級/二級/木造）
+    if (info.architectQualification) {
+      drawText(page, getArchitectQualificationLabel(info.architectQualification), coords.architectQualification, font);
+    }
+
+    // 登録番号
+    if (info.architectRegistrationNumber) {
+      drawText(page, info.architectRegistrationNumber, coords.registrationNumber, font);
+    }
+
+    // 登録を受けた都道府県名（二級/木造の場合）
+    if (info.architectRegistrationPrefecture) {
+      drawText(page, info.architectRegistrationPrefecture, coords.registrationPrefecture, font);
+    }
+
+    // 事務所名称
+    if (info.officeName) {
+      drawText(page, info.officeName, coords.officeName, font);
+    }
+
+    // 事務所所在地
+    if (info.officeAddress) {
+      drawText(page, info.officeAddress, coords.officeAddress, font);
+    }
+
+    // 事務所の別（一級/二級/木造建築士事務所）
+    if (info.officeType) {
+      drawText(page, getOfficeTypeLabel(info.officeType), coords.officeType, font);
+    }
+
+    // 事務所登録年月日
+    if (info.officeRegistrationDate) {
+      drawText(page, info.officeRegistrationDate, coords.officeRegistrationDate, font);
+    }
+
+    // 事務所登録番号
+    if (info.officeRegistrationNumber) {
+      drawText(page, info.officeRegistrationNumber, coords.officeRegistrationNumber, font);
+    }
+  } else {
+    // --- フォールバック: フラットフィールド（旧データ or 他の組織種別） ---
+
+    // 建築士 氏名
+    if (certificate.issuerName) {
+      drawText(page, certificate.issuerName, coords.issuerName, font);
+    }
+
+    // 登録番号
+    if (certificate.issuerQualificationNumber) {
+      drawText(page, certificate.issuerQualificationNumber, coords.registrationNumber, font);
+    }
+
+    // 事務所名称
+    if (certificate.issuerOfficeName) {
+      drawText(page, certificate.issuerOfficeName, coords.officeName, font);
+    }
+
+    // 事務所種別（日本語ラベルに変換）
+    if (certificate.issuerOrganizationType) {
+      const label = getOrganizationTypeLabel(certificate.issuerOrganizationType) || certificate.issuerOrganizationType;
+      drawText(page, label, coords.officeType, font);
+    }
   }
 }
 

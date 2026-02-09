@@ -38,82 +38,140 @@ export default function CertificatePreviewPage() {
     return labels[type] || type;
   };
 
-  // 統合計算結果を計算
+  // 統合計算結果を計算（Excel Row 442-461 準拠）
   const calculateCombinedResult = () => {
     if (!certificate) return null;
 
-    const { seismic, barrierFree, energySaving, cohabitation, childcare, otherRenovation } = certificate.works;
+    const { seismic, barrierFree, energySaving, cohabitation, childcare, otherRenovation, longTermHousing } = certificate.works;
 
     // いずれかの工事データがあるかチェック
     if (!seismic?.summary && !barrierFree?.summary && !energySaving?.summary &&
-        !cohabitation?.summary && !childcare?.summary) {
+        !cohabitation?.summary && !childcare?.summary && !longTermHousing?.summary) {
       return null;
     }
 
-    // 各工事の上限適用後控除額を計算
-    const seismicDeduction = seismic?.summary
-      ? Math.min(seismic.summary.deductibleAmount, 2_500_000)
-      : 0;
+    const hasSolar = energySaving?.summary?.hasSolarPower || false;
 
-    const barrierFreeDeduction = barrierFree?.summary
-      ? Math.min(barrierFree.summary.deductibleAmount, 2_000_000)
-      : 0;
+    // ====== 各工事の ウ(deductibleAmount), エ(maxDeduction), オ(excessAmount) ======
 
-    const energyDeduction = energySaving?.summary
-      ? Math.min(
-          energySaving.summary.deductibleAmount,
-          energySaving.summary.hasSolarPower ? 3_500_000 : 2_500_000
-        )
-      : 0;
+    // ① 耐震: 上限250万, 50万超要件なし
+    const s_ウ = seismic?.summary?.deductibleAmount ?? 0;
+    const s_エ = Math.min(s_ウ, 2_500_000);
+    const s_オ = Math.max(0, s_ウ - s_エ);
 
-    const cohabitationDeduction = cohabitation?.summary
-      ? Math.min(cohabitation.summary.deductibleAmount, 2_500_000)
-      : 0;
+    // ② バリアフリー: 上限200万, 50万超要件
+    const bf_ウ = barrierFree?.summary?.deductibleAmount ?? 0;
+    const bf_エ = Math.min(bf_ウ, 2_000_000);
+    const bf_オ = Math.max(0, bf_ウ - bf_エ);
 
-    const childcareDeduction = childcare?.summary
-      ? Math.min(childcare.summary.deductibleAmount, 2_500_000)
-      : 0;
+    // ③ 省エネ: 上限250/350万(太陽光), 50万超要件
+    const e_ウ = energySaving?.summary?.deductibleAmount ?? 0;
+    const e_limit = hasSolar ? 3_500_000 : 2_500_000;
+    const e_エ = Math.min(e_ウ, e_limit);
+    const e_オ = Math.max(0, e_ウ - e_エ);
 
-    // 合計控除対象額（上限適用後）
-    const totalDeductible = seismicDeduction + barrierFreeDeduction + energyDeduction +
-                           cohabitationDeduction + childcareDeduction;
+    // ④ 同居対応: 上限250万, 50万超要件
+    const co_ウ = cohabitation?.summary?.deductibleAmount ?? 0;
+    const co_エ = Math.min(co_ウ, 2_500_000);
+    const co_オ = Math.max(0, co_ウ - co_エ);
 
-    // 最大控除額（10%）
-    const maxControlAmount = Math.floor(totalDeductible * 0.1);
+    // ⑦ 子育て: 上限250万, 50万超要件
+    const cc_ウ = childcare?.summary?.deductibleAmount ?? 0;
+    const cc_エ = Math.min(cc_ウ, 2_500_000);
+    const cc_オ = Math.max(0, cc_ウ - cc_エ);
 
-    // 超過額計算（各工事の超過額の合計）
-    const seismicExcess = seismic?.summary
-      ? Math.max(0, seismic.summary.deductibleAmount - 2_500_000)
-      : 0;
-    const barrierFreeExcess = barrierFree?.summary
-      ? Math.max(0, barrierFree.summary.deductibleAmount - 2_000_000)
-      : 0;
-    const energyExcess = energySaving?.summary
-      ? Math.max(0, energySaving.summary.deductibleAmount - (energySaving.summary.hasSolarPower ? 3_500_000 : 2_500_000))
-      : 0;
-    const cohabitationExcess = cohabitation?.summary
-      ? Math.max(0, cohabitation.summary.deductibleAmount - 2_500_000)
-      : 0;
-    const childcareExcess = childcare?.summary
-      ? Math.max(0, childcare.summary.deductibleAmount - 2_500_000)
-      : 0;
+    // ⑤ 長期優良OR: 太陽光無=250万, 太陽光有=350万
+    const ltSummary = longTermHousing?.summary;
+    const isExcellent = ltSummary?.isExcellentHousing || false;
+    const ltOr_ウ = (!isExcellent && ltSummary) ? ltSummary.deductibleAmount : 0;
+    const ltOr_limit = hasSolar ? 3_500_000 : 2_500_000;
+    const ltOr_エ = Math.min(ltOr_ウ, ltOr_limit);
+    const ltOr_オ = Math.max(0, ltOr_ウ - ltOr_エ);
 
-    const excessAmount = seismicExcess + barrierFreeExcess + energyExcess +
-                        cohabitationExcess + childcareExcess;
+    // ⑥ 長期優良AND: 太陽光無=500万, 太陽光有=600万
+    const ltAnd_ウ = (isExcellent && ltSummary) ? ltSummary.deductibleAmount : 0;
+    const ltAnd_limit = hasSolar ? 6_000_000 : 5_000_000;
+    const ltAnd_エ = Math.min(ltAnd_ウ, ltAnd_limit);
+    const ltAnd_オ = Math.max(0, ltAnd_ウ - ltAnd_エ);
 
-    // その他増改築工事を含めた最終控除対象額
-    const otherAmount = otherRenovation?.summary?.deductibleAmount || 0;
-    const finalDeductible = totalDeductible + otherAmount;
+    // ====== パターン比較（Excel Row 442-453） ======
 
-    // 残り控除可能枠（1,000万円上限）
-    const remaining = Math.max(0, 10_000_000 - finalDeductible);
+    // パターン1: ⑧=①ウ+②ウ+③ウ+④ウ+⑦ウ, ⑨=①エ+②エ+③エ+④エ+⑦エ, ⑩=①オ+②オ+③オ+④オ+⑦オ
+    const p1_ウ = s_ウ + bf_ウ + e_ウ + co_ウ + cc_ウ;
+    const p1_エ = s_エ + bf_エ + e_エ + co_エ + cc_エ;
+    const p1_オ = s_オ + bf_オ + e_オ + co_オ + cc_オ;
+
+    // パターン2: ⑪=②ウ+④ウ+⑤ウ+⑦ウ, ⑫=②エ+④エ+⑤エ+⑦エ, ⑬=②オ+④オ+⑤オ+⑦オ
+    const p2_ウ = bf_ウ + co_ウ + ltOr_ウ + cc_ウ;
+    const p2_エ = bf_エ + co_エ + ltOr_エ + cc_エ;
+    const p2_オ = bf_オ + co_オ + ltOr_オ + cc_オ;
+
+    // パターン3: ⑭=②ウ+④ウ+⑥ウ+⑦ウ, ⑮=②エ+④エ+⑥エ+⑦エ, ⑯=②オ+④オ+⑥オ+⑦オ
+    const p3_ウ = bf_ウ + co_ウ + ltAnd_ウ + cc_ウ;
+    const p3_エ = bf_エ + co_エ + ltAnd_エ + cc_エ;
+    const p3_オ = bf_オ + co_オ + ltAnd_オ + cc_オ;
+
+    // ⑰ = MAX(⑨, ⑫, ⑮): 最大控除額（10%控除分）
+    let maxControlAmount = Math.max(p1_エ, p2_エ, p3_エ);
+
+    // ⑱ = MAX(⑧, ⑪, ⑭): 最大工事費
+    const totalDeductible = Math.max(p1_ウ, p2_ウ, p3_ウ);
+
+    // ⑲: ⑱に対応するパターンの超過額（⑱の金額に係る額）
+    let excessAmount: number;
+    if (totalDeductible === p3_ウ && p3_ウ > 0) {
+      excessAmount = p3_オ;
+    } else if (totalDeductible === p2_ウ && p2_ウ > 0) {
+      excessAmount = p2_オ;
+    } else {
+      excessAmount = p1_オ;
+    }
+
+    // ⑰は1,000万円上限
+    const TOTAL_LIMIT = 10_000_000;
+    if (maxControlAmount > TOTAL_LIMIT) {
+      maxControlAmount = TOTAL_LIMIT;
+    }
+
+    // ⑳ウ: その他増改築の控除対象額
+    const otherAmount = otherRenovation?.summary?.deductibleAmount ?? 0;
+
+    // ㉑: 5%控除の基礎額（公式記入例準拠）
+    // ⑲+⑳ウ > 0 の場合: MIN(⑱, ⑲+⑳ウ)
+    // ⑲+⑳ウ = 0 の場合: ⑱（全額が5%控除の基礎）
+    let finalDeductible: number;
+    if (totalDeductible <= 0) {
+      finalDeductible = 0;
+    } else if (excessAmount + otherAmount > 0) {
+      finalDeductible = Math.min(totalDeductible, excessAmount + otherAmount);
+    } else {
+      finalDeductible = totalDeductible;
+    }
+
+    // ㉒ = MAX(0, 1,000万 - ⑰): 残り控除可能枠
+    const remaining = Math.max(0, TOTAL_LIMIT - maxControlAmount);
+
+    // ㉓ = MIN(㉑, ㉒): 5%控除分
+    const fivePercentDeductible = Math.min(finalDeductible, remaining);
+
+    // 採用パターン判定
+    let bestPattern = 1;
+    if (maxControlAmount === p3_エ && p3_エ > 0) bestPattern = 3;
+    else if (maxControlAmount === p2_エ && p2_エ > 0) bestPattern = 2;
 
     return {
-      maxControlAmount,
-      totalDeductible,
-      excessAmount,
-      finalDeductible,
-      remaining,
+      // パターン個別値
+      p1_ウ, p1_エ, p1_オ,
+      p2_ウ, p2_エ, p2_オ,
+      p3_ウ, p3_エ, p3_オ,
+      bestPattern,
+      // 最終値
+      maxControlAmount,     // ⑰
+      totalDeductible,      // ⑱
+      excessAmount,         // ⑲
+      finalDeductible,      // ㉑
+      remaining,            // ㉒
+      fivePercentDeductible,// ㉓
     };
   };
 
@@ -602,28 +660,162 @@ export default function CertificatePreviewPage() {
                 </div>
               )}
 
-              {/* 統合計算結果 */}
+              {/* ⑤ 長期優良住宅化（耐震又は省エネ） */}
+              {works.longTermHousing?.summary && !(works.longTermHousing.summary.isExcellentHousing) && (
+                <div className="mb-6 pl-4">
+                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="text-teal-600">🏠</span>
+                    ⑤ 長期優良住宅化（耐震又は省エネ）
+                  </h4>
+                  <div className="bg-teal-50 p-4 rounded space-y-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-600">ア: 工事費総額</span>
+                        <div className="font-semibold">¥{works.longTermHousing.summary.totalAmount.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">イ: 補助金額</span>
+                        <div className="font-semibold">¥{works.longTermHousing.summary.subsidyAmount.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">ウ: 補助金差引後</span>
+                        <div className="font-semibold">¥{works.longTermHousing.summary.deductibleAmount.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">
+                          エ: 上限適用後（{works.energySaving?.summary?.hasSolarPower ? '350万円' : '250万円'}）
+                        </span>
+                        <div className="font-bold text-teal-700">
+                          ¥{Math.min(
+                            works.longTermHousing.summary.deductibleAmount,
+                            works.energySaving?.summary?.hasSolarPower ? 3_500_000 : 2_500_000
+                          ).toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">オ: 超過額</span>
+                        <div className="font-semibold">
+                          ¥{Math.max(0,
+                            works.longTermHousing.summary.deductibleAmount -
+                            (works.energySaving?.summary?.hasSolarPower ? 3_500_000 : 2_500_000)
+                          ).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ⑥ 長期優良住宅化（耐震及び省エネ） */}
+              {works.longTermHousing?.summary && works.longTermHousing.summary.isExcellentHousing && (
+                <div className="mb-6 pl-4">
+                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <span className="text-teal-600">🏠</span>
+                    ⑥ 長期優良住宅化（耐震及び省エネ）
+                  </h4>
+                  <div className="bg-teal-50 p-4 rounded space-y-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-600">ア: 工事費総額</span>
+                        <div className="font-semibold">¥{works.longTermHousing.summary.totalAmount.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">イ: 補助金額</span>
+                        <div className="font-semibold">¥{works.longTermHousing.summary.subsidyAmount.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">ウ: 補助金差引後</span>
+                        <div className="font-semibold">¥{works.longTermHousing.summary.deductibleAmount.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">
+                          エ: 上限適用後（{works.energySaving?.summary?.hasSolarPower ? '600万円' : '500万円'}）
+                        </span>
+                        <div className="font-bold text-teal-700">
+                          ¥{Math.min(
+                            works.longTermHousing.summary.deductibleAmount,
+                            works.energySaving?.summary?.hasSolarPower ? 6_000_000 : 5_000_000
+                          ).toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">オ: 超過額</span>
+                        <div className="font-semibold">
+                          ¥{Math.max(0,
+                            works.longTermHousing.summary.deductibleAmount -
+                            (works.energySaving?.summary?.hasSolarPower ? 6_000_000 : 5_000_000)
+                          ).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 統合計算結果（パターン比較） */}
               {combinedResult && (
                 <div className="mb-6 pl-4">
                   <h4 className="font-semibold text-gray-800 mb-3">複数制度の組み合わせ計算</h4>
+
+                  {/* パターン比較表 */}
+                  <div className="bg-indigo-50 p-4 rounded space-y-4 mb-4">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-indigo-200">
+                            <th className="text-left py-2 px-2 text-gray-600">パターン</th>
+                            <th className="text-right py-2 px-2 text-gray-600">ウ合計</th>
+                            <th className="text-right py-2 px-2 text-gray-600">エ合計(上限後)</th>
+                            <th className="text-right py-2 px-2 text-gray-600">オ合計(超過)</th>
+                            <th className="text-center py-2 px-2 text-gray-600">採用</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className={`border-b border-indigo-100 ${combinedResult.bestPattern === 1 ? 'bg-indigo-100 font-semibold' : ''}`}>
+                            <td className="py-2 px-2">P1: ①+②+③+④+⑦</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p1_ウ.toLocaleString()}</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p1_エ.toLocaleString()}</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p1_オ.toLocaleString()}</td>
+                            <td className="text-center py-2 px-2">{combinedResult.bestPattern === 1 ? '★' : ''}</td>
+                          </tr>
+                          <tr className={`border-b border-indigo-100 ${combinedResult.bestPattern === 2 ? 'bg-indigo-100 font-semibold' : ''}`}>
+                            <td className="py-2 px-2">P2: ②+④+⑤+⑦</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p2_ウ.toLocaleString()}</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p2_エ.toLocaleString()}</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p2_オ.toLocaleString()}</td>
+                            <td className="text-center py-2 px-2">{combinedResult.bestPattern === 2 ? '★' : ''}</td>
+                          </tr>
+                          <tr className={`${combinedResult.bestPattern === 3 ? 'bg-indigo-100 font-semibold' : ''}`}>
+                            <td className="py-2 px-2">P3: ②+④+⑥+⑦</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p3_ウ.toLocaleString()}</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p3_エ.toLocaleString()}</td>
+                            <td className="text-right py-2 px-2">¥{combinedResult.p3_オ.toLocaleString()}</td>
+                            <td className="text-center py-2 px-2">{combinedResult.bestPattern === 3 ? '★' : ''}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* 最終計算値 */}
                   <div className="bg-indigo-50 p-4 rounded space-y-2">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <span className="text-sm text-gray-600">⑰ 最大控除額（10%控除分）</span>
+                        <span className="text-sm text-gray-600">⑰ 最大控除額 = MAX(⑨,⑫,⑮)</span>
                         <div className="font-bold text-xl text-indigo-700">
                           ¥{combinedResult.maxControlAmount.toLocaleString()}
                         </div>
                       </div>
                       <div>
-                        <span className="text-sm text-gray-600">⑱ 最大工事費</span>
+                        <span className="text-sm text-gray-600">⑱ 最大工事費 = MAX(⑧,⑪,⑭)</span>
                         <div className="font-semibold">¥{combinedResult.totalDeductible.toLocaleString()}</div>
                       </div>
                       <div>
-                        <span className="text-sm text-gray-600">⑲ 超過額</span>
+                        <span className="text-sm text-gray-600">⑲ 対応超過額</span>
                         <div className="font-semibold">¥{combinedResult.excessAmount.toLocaleString()}</div>
                       </div>
                       <div>
-                        <span className="text-sm text-gray-600">㉒ 残り控除可能枠（1,000万円上限）</span>
+                        <span className="text-sm text-gray-600">㉒ 残り控除可能枠 = MAX(0, 1000万-⑰)</span>
                         <div className="font-semibold text-green-700">¥{combinedResult.remaining.toLocaleString()}</div>
                       </div>
                     </div>
@@ -659,14 +851,39 @@ export default function CertificatePreviewPage() {
                 </div>
               )}
 
-              {/* ㉑ 最終控除対象額 */}
-              {combinedResult && works.otherRenovation?.summary && (
+              {/* ㉑㉒㉓ 最終控除計算 */}
+              {combinedResult && (
                 <div className="mb-6 pl-4">
-                  <div className="bg-gradient-to-r from-indigo-100 to-purple-100 p-4 rounded-lg">
+                  <div className="bg-gradient-to-r from-indigo-100 to-purple-100 p-4 rounded-lg space-y-4">
                     <div className="text-center">
-                      <span className="text-sm text-gray-700 block mb-2">㉑ 最終控除対象額（⑱ + ⑳ウ）</span>
-                      <div className="font-bold text-3xl text-indigo-900">
+                      <span className="text-sm text-gray-700 block mb-2">㉑ 最終控除対象額 = MIN(⑱, ⑲+⑳ウ)</span>
+                      <div className="font-bold text-2xl text-indigo-900">
                         ¥{combinedResult.finalDeductible.toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 border-t border-indigo-200 pt-3">
+                      <div className="text-center">
+                        <span className="text-sm text-gray-700 block mb-1">㉒ 残り = MAX(0, 1000万-⑰)</span>
+                        <div className="font-semibold text-lg text-green-700">
+                          ¥{combinedResult.remaining.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <span className="text-sm text-gray-700 block mb-1">㉓ 5%控除分 = MIN(㉑, ㉒)</span>
+                        <div className="font-bold text-lg text-purple-700">
+                          ¥{combinedResult.fivePercentDeductible.toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="border-t border-indigo-200 pt-3 text-center">
+                      <span className="text-xs text-gray-600 block mb-1">税額控除見込み</span>
+                      <div className="text-sm text-gray-700">
+                        10%控除分: ¥{combinedResult.maxControlAmount.toLocaleString()} x 10% = <span className="font-bold">¥{Math.floor(combinedResult.maxControlAmount * 0.1).toLocaleString()}</span>
+                        {combinedResult.fivePercentDeductible > 0 && (
+                          <span className="ml-4">
+                            5%控除分: ¥{combinedResult.fivePercentDeductible.toLocaleString()} x 5% = <span className="font-bold">¥{Math.floor(combinedResult.fivePercentDeductible * 0.05).toLocaleString()}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

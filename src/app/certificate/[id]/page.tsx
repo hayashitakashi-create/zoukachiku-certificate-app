@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { certificateStore, type Certificate } from '@/lib/store';
 import { generateHousingLoanPDF } from '@/lib/housingLoanPdfGeneratorV2';
 import { generatePropertyTaxPDF } from '@/lib/pdf/propertyTaxPdfGenerator';
+import { generateReformTaxPDF } from '@/lib/pdf/reformTaxPdfGenerator';
+import { generateResalePDF } from '@/lib/pdf/resalePdfGenerator';
 
 export default function CertificateDetailPage({
   params,
@@ -112,6 +114,7 @@ export default function CertificateDetailPage({
         issuerQualificationNumber: certificate.issuerQualificationNumber || null,
         issueDate: certificate.issueDate || null,
         status: certificate.status,
+        issuerInfo: certificate.issuerInfo || null,
       };
 
       let pdfBytes: Uint8Array;
@@ -163,6 +166,109 @@ export default function CertificateDetailPage({
             } : undefined,
           });
           filePrefix = 'property-tax';
+          break;
+        }
+        case 'reform_tax': {
+          const rtWorks = certificate.works;
+          // 各工事の計算結果をWorkCostData形式に変換
+          const toWorkCost = (summary: { totalAmount: number; subsidyAmount: number; deductibleAmount: number } | null, limit: number) => {
+            if (!summary) return undefined;
+            const maxDeduction = Math.min(summary.deductibleAmount, limit);
+            return {
+              totalAmount: summary.totalAmount,
+              subsidyAmount: summary.subsidyAmount,
+              deductibleAmount: summary.deductibleAmount,
+              maxDeduction,
+              excessAmount: Math.max(0, summary.deductibleAmount - maxDeduction),
+            };
+          };
+
+          const hasSolar = rtWorks.energySaving.summary?.hasSolarPower || false;
+          const energyLimit = hasSolar ? 3_500_000 : 2_500_000;
+
+          // 長期優良住宅化: isExcellentHousing で OR(⑤)/AND(⑥) を判定
+          const ltSummary = rtWorks.longTermHousing.summary;
+          const isExcellent = ltSummary?.isExcellentHousing || false;
+
+          let longTermHousingOr: ReturnType<typeof toWorkCost> = undefined;
+          let longTermHousingAnd: ReturnType<typeof toWorkCost> & { isExcellentHousing?: boolean } | undefined = undefined;
+
+          if (ltSummary && ltSummary.deductibleAmount > 0) {
+            if (isExcellent) {
+              // AND型(⑥): 太陽光無=500万, 太陽光有=600万
+              const andLimit = hasSolar ? 6_000_000 : 5_000_000;
+              const maxDed = Math.min(ltSummary.deductibleAmount, andLimit);
+              longTermHousingAnd = {
+                totalAmount: ltSummary.totalAmount,
+                subsidyAmount: ltSummary.subsidyAmount,
+                deductibleAmount: ltSummary.deductibleAmount,
+                maxDeduction: maxDed,
+                excessAmount: Math.max(0, ltSummary.deductibleAmount - maxDed),
+                isExcellentHousing: true,
+              };
+            } else {
+              // OR型(⑤): 太陽光無=250万, 太陽光有=350万
+              const orLimit = hasSolar ? 3_500_000 : 2_500_000;
+              const maxDed = Math.min(ltSummary.deductibleAmount, orLimit);
+              longTermHousingOr = {
+                totalAmount: ltSummary.totalAmount,
+                subsidyAmount: ltSummary.subsidyAmount,
+                deductibleAmount: ltSummary.deductibleAmount,
+                maxDeduction: maxDed,
+                excessAmount: Math.max(0, ltSummary.deductibleAmount - maxDed),
+              };
+            }
+          }
+
+          pdfBytes = await generateReformTaxPDF({
+            ...baseData,
+            seismic: toWorkCost(rtWorks.seismic.summary, 2_500_000),
+            barrierFree: toWorkCost(rtWorks.barrierFree.summary, 2_000_000),
+            energySaving: rtWorks.energySaving.summary ? {
+              ...toWorkCost(rtWorks.energySaving.summary, energyLimit)!,
+              hasSolarPower: hasSolar,
+            } : undefined,
+            cohabitation: toWorkCost(rtWorks.cohabitation.summary, 2_500_000),
+            childcare: toWorkCost(rtWorks.childcare.summary, 2_500_000),
+            longTermHousingOr,
+            longTermHousingAnd: longTermHousingAnd as typeof longTermHousingAnd & { isExcellentHousing: boolean } | undefined,
+            otherRenovation: rtWorks.otherRenovation.summary ? {
+              totalAmount: rtWorks.otherRenovation.summary.totalAmount,
+              subsidyAmount: rtWorks.otherRenovation.summary.subsidyAmount,
+              deductibleAmount: rtWorks.otherRenovation.summary.deductibleAmount,
+              maxDeduction: rtWorks.otherRenovation.summary.deductibleAmount,
+              excessAmount: 0,
+            } : undefined,
+          });
+          filePrefix = 'reform-tax';
+          break;
+        }
+        case 'resale': {
+          const rsWorks = certificate.works;
+          // 全工事の合計を計算
+          const allSummaries = [
+            rsWorks.seismic.summary,
+            rsWorks.barrierFree.summary,
+            rsWorks.energySaving.summary,
+            rsWorks.cohabitation.summary,
+            rsWorks.childcare.summary,
+            rsWorks.longTermHousing.summary,
+            rsWorks.otherRenovation.summary,
+          ];
+          const totalWorkCost = allSummaries.reduce(
+            (sum, s) => sum + (s?.totalAmount ?? 0), 0
+          );
+          const totalSubsidy = certificate.subsidyAmount || 0;
+          const deductible = Math.max(0, totalWorkCost - totalSubsidy);
+
+          pdfBytes = await generateResalePDF({
+            ...baseData,
+            totalWorkCost,
+            hasSubsidy: totalSubsidy > 0,
+            subsidyAmount: totalSubsidy,
+            deductibleAmount: deductible,
+          });
+          filePrefix = 'resale';
           break;
         }
         default:
@@ -303,7 +409,7 @@ export default function CertificateDetailPage({
             <Link href="/" className="text-gray-500 hover:text-gray-700 text-sm">
               &larr; 一覧
             </Link>
-            <h1 className="text-lg font-bold text-gray-900">証明書詳細</h1>
+            <Link href="/" className="text-lg font-bold text-gray-900 hover:text-blue-600 transition-colors">証明書詳細</Link>
             <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(certificate.status)}`}>
               {getStatusLabel(certificate.status)}
             </span>

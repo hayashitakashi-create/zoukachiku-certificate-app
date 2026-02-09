@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { IssuerInfo } from '@/types/issuer';
 import IssuerInfoForm from '@/components/IssuerInfoForm';
-import { certificateStore, createNewCertificate, type PurposeType } from '@/lib/store';
+import { certificateStore, type PurposeType } from '@/lib/store';
 
 // ステップの定義
 type WizardStep = 1 | 2 | 3 | 4;
@@ -238,23 +238,23 @@ export default function CertificateCreatePage() {
         }
       }
 
-      // IndexedDBに証明書を作成
-      const cert = createNewCertificate(formData.purposeType as PurposeType);
-      cert.applicantName = formData.applicantName;
-      cert.applicantAddress = fullApplicantAddress;
-      cert.propertyNumber = formData.propertyNumber;
-      cert.propertyAddress = formData.propertyAddress;
-      cert.completionDate = formData.completionDate;
-      cert.issuerName = issuerName;
-      cert.issuerOfficeName = issuerOfficeName;
-      cert.issueDate = formData.issueDate;
-      cert.issuerOrganizationType = issuerOrganizationType;
-      cert.issuerQualificationNumber = issuerQualificationNumber;
-      cert.subsidyAmount = formData.subsidyAmount;
-      cert.status = status;
-
-      // Dexie に保存
-      await certificateStore.updateCertificate(cert.id, cert);
+      // IndexedDBに証明書を新規作成して保存
+      const cert = await certificateStore.createCertificate(formData.purposeType as PurposeType);
+      await certificateStore.updateCertificate(cert.id, {
+        applicantName: formData.applicantName,
+        applicantAddress: fullApplicantAddress,
+        propertyNumber: formData.propertyNumber,
+        propertyAddress: formData.propertyAddress,
+        completionDate: formData.completionDate,
+        issuerName,
+        issuerOfficeName,
+        issueDate: formData.issueDate,
+        issuerOrganizationType,
+        issuerQualificationNumber,
+        issuerInfo: formData.issuerInfo as any || null,
+        subsidyAmount: formData.subsidyAmount,
+        status,
+      });
 
       // ローカルストレージの下書きをクリア
       localStorage.removeItem('certificate-form-data');

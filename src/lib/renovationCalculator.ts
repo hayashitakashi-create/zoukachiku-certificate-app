@@ -372,11 +372,12 @@ export interface CombinedRenovations {
 }
 
 export interface OptimalCombinationResult {
-  totalDeductible: number;     // ⑱ 最大工事費
-  maxControlAmount: number;    // ⑰ 最大控除額（10%控除分）
-  excessAmount: number;        // ⑲ 超過額
-  remaining: number;           // ㉒ 残り控除可能額（1000万円 - ⑰）
-  finalDeductible: number;     // ㉑ 最終控除対象額（⑱とその他増改築の合算）
+  totalDeductible: number;         // ⑱ 最大工事費
+  maxControlAmount: number;        // ⑰ 最大控除額（10%控除分）
+  excessAmount: number;            // ⑲ 超過額
+  remaining: number;               // ㉒ 残り控除可能額（1000万円 - ⑰）
+  finalDeductible: number;         // ㉑ 最終控除対象額（⑱とその他増改築の合算）
+  fivePercentDeductible: number;   // ㉓ 5%控除分 = MIN(㉑, ㉒)
 }
 
 export function calculateOptimalCombination(
@@ -468,12 +469,11 @@ export function calculateOptimalCombination(
   // ⑱ = MAX(⑧, ⑪, ⑭): 最大工事費
   const totalDeductible = Math.max(pattern1_total, pattern2_total, pattern3_total);
 
-  // ⑲: ⑱に対応する超過額
-  // ⑰の最大値がどのパターンから来たかに基づいて対応する超過額を選ぶ
+  // ⑲: ⑱に対応する超過額（⑱の金額に係る額＝⑱と同じパターンのオ）
   let excessAmount: number;
-  if (maxControlAmount === pattern3_max && pattern3_max > 0) {
+  if (totalDeductible === pattern3_total && pattern3_total > 0) {
     excessAmount = pattern3_excess;
-  } else if (maxControlAmount === pattern2_max && pattern2_max > 0) {
+  } else if (totalDeductible === pattern2_total && pattern2_total > 0) {
     excessAmount = pattern2_excess;
   } else {
     excessAmount = pattern1_excess;
@@ -486,12 +486,20 @@ export function calculateOptimalCombination(
   // ⑳ウ: その他増改築の控除対象額
   const otherDeductible = renovations.other?.deductibleAmount ?? 0;
 
-  // ㉑ = MIN(⑱, ⑲ + ⑳ウ): 最終控除対象額
-  // Excel: =IF(OR(AQ452>0,AQ453+AQ458>0),MIN(AQ452,AQ453+AQ458),"")
-  // ⑱（最大工事費）と（⑲超過額 + ⑳ウその他増改築）の小さい方
-  const finalDeductible = (totalDeductible > 0 || (excessAmount + otherDeductible) > 0)
-    ? Math.min(totalDeductible, excessAmount + otherDeductible)
-    : 0;
+  // ㉑: 5%控除の基礎額
+  // 国税庁: B = (1)と(2)のいずれか低い金額
+  //   (1) 控除対象限度額超過額(⑲) + その他工事費(⑳ウ)
+  //   (2) 標準的な費用の額(⑱)
+  // ただし公式記入例より、⑲+⑳ウ=0の場合は⑱を使用（5%控除の基礎 = 全額）
+  let finalDeductible: number;
+  if (totalDeductible <= 0) {
+    finalDeductible = 0;
+  } else if (excessAmount + otherDeductible > 0) {
+    finalDeductible = Math.min(totalDeductible, excessAmount + otherDeductible);
+  } else {
+    // 超過なし＋その他なし → 全額が5%控除の基礎（公式記入例準拠）
+    finalDeductible = totalDeductible;
+  }
 
   // ========================================
   // 1,000万円上限適用
@@ -506,12 +514,16 @@ export function calculateOptimalCombination(
   // ㉒ = MAX(0, 10,000,000 - ⑰): 残り控除可能額
   const remaining = Math.max(0, TOTAL_LIMIT - maxControlAmount);
 
+  // ㉓ = MIN(㉑, ㉒): 5%控除分
+  const fivePercentDeductible = Math.min(finalDeductible, remaining);
+
   return {
     totalDeductible: Math.round(totalDeductible),
     maxControlAmount: Math.round(maxControlAmount),
     excessAmount: Math.round(excessAmount),
     remaining: Math.round(remaining),
     finalDeductible: Math.round(finalDeductible),
+    fivePercentDeductible: Math.round(fivePercentDeductible),
   };
 }
 

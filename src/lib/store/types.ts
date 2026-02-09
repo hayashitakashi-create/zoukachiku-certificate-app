@@ -5,6 +5,8 @@
  * サーバーDB (Prisma) には依存せず、ブラウザ内で完結する。
  */
 
+import type { IssuerInfo } from '@/types/issuer';
+
 // =============================================
 // 共通
 // =============================================
@@ -128,6 +130,9 @@ export interface Certificate {
   issuerOrganizationType: string;
   issuerQualificationNumber: string;
 
+  // 発行者情報（リッチデータ）
+  issuerInfo?: IssuerInfo | null;
+
   // 補助金
   subsidyAmount: number;
 
@@ -197,6 +202,7 @@ export function createNewCertificate(purposeType: PurposeType = 'housing_loan'):
     issueDate: '',
     issuerOrganizationType: '',
     issuerQualificationNumber: '',
+    issuerInfo: null,
     subsidyAmount: 0,
     status: 'draft',
     works: createEmptyWorkData(),
