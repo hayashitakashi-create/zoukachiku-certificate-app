@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { db } from '@/lib/store/db';
 import type {
   Certificate,
@@ -526,6 +527,7 @@ function makeCert(input: CertInput, index: number): Certificate {
 
 export default function SeedPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
@@ -536,8 +538,13 @@ export default function SeedPage() {
         // 既存データをクリア
         await db.certificates.clear();
 
+        const userId = session?.user?.id;
         const certs = buildCertificates();
         for (const cert of certs) {
+          // ログイン中のユーザーIDを設定（一覧に表示されるようにする）
+          if (userId) {
+            cert.userId = userId;
+          }
           await db.certificates.add(cert);
         }
 
