@@ -454,10 +454,28 @@ export default function CertificateCreatePage() {
 
       // 補助金合計を計算
       let totalSubsidy = 0;
+      let totalWorkCost = 0;
       for (const data of Object.values(workData)) {
         if (data.summary) {
           totalSubsidy += data.summary.subsidyAmount;
+          totalWorkCost += data.summary.totalAmount;
         }
+      }
+
+      // housingLoanDetail の構築（housing_loan の場合のみ）
+      // workTypes は詳細型（Work1Type等）をそのまま保存し、PDF生成時に参照する
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let housingLoanDetail: any = null;
+      if (formData.purposeType === 'housing_loan') {
+        const deductible = Math.max(0, totalWorkCost - totalSubsidy);
+        housingLoanDetail = {
+          workTypes: formData.housingLoanWorkTypes,
+          workDescription: Object.values(formData.workDescriptions || {}).filter(Boolean).join('、'),
+          totalCost: totalWorkCost,
+          hasSubsidy: totalSubsidy > 0,
+          subsidyAmount: totalSubsidy,
+          deductibleAmount: deductible,
+        };
       }
 
       // IndexedDBに証明書を新規作成して保存
@@ -477,6 +495,7 @@ export default function CertificateCreatePage() {
         subsidyAmount: totalSubsidy,
         works: workData,
         workDescriptions: formData.workDescriptions,
+        housingLoanDetail,
         status,
       });
 
