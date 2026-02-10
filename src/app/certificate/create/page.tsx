@@ -33,6 +33,34 @@ const PURPOSE_WORK_TYPES: Record<PurposeType, string[]> = {
   property_tax: ['seismic', 'barrierFree', 'energySaving', 'longTermHousing'],
 };
 
+// 用途ごとの公式様式セクション情報
+const PURPOSE_SECTION_INFO: Record<PurposeType, { category: string; sectionNumber: string; title: string; description: string }> = {
+  housing_loan: {
+    category: 'Ⅰ．所得税額の特別控除',
+    sectionNumber: '１',
+    title: '償還期間が10年以上の住宅借入金等を利用して増改築等をした場合（住宅借入金等特別税額控除）',
+    description: '住宅ローン控除の対象となる増改築等工事の内容を記入します。',
+  },
+  reform_tax: {
+    category: 'Ⅰ．所得税額の特別控除',
+    sectionNumber: '３',
+    title: '住宅耐震改修、高齢者等居住改修工事等（バリアフリー改修工事）、一般断熱改修工事等（省エネ改修工事）、多世帯同居改修工事等、耐久性向上改修工事等又は子育て対応改修工事等を含む増改築等をした場合（住宅耐震改修特別税額控除又は住宅特定改修特別税額控除）',
+    description: '特定の改修工事に対する税額控除の対象となる工事内容を記入します。',
+  },
+  resale: {
+    category: 'Ⅰ．所得税額の特別控除',
+    sectionNumber: '４',
+    title: '償還期間が10年以上の住宅借入金等を利用して特定の増改築等がされた住宅用家屋を取得した場合（買取再販住宅の取得に係る住宅借入金等特別税額控除）',
+    description: '買取再販住宅の取得に係る工事内容を記入します。',
+  },
+  property_tax: {
+    category: 'Ⅱ．固定資産税の減額',
+    sectionNumber: '１',
+    title: '住宅耐震改修、高齢者等居住改修工事等（バリアフリー改修工事）、一般断熱改修工事等（省エネ改修工事）又は耐久性向上改修工事等を行った場合（固定資産税の減額措置）',
+    description: '固定資産税の減額対象となる改修工事の内容を記入します。',
+  },
+};
+
 // フォームデータの型定義
 type CertificateFormData = {
   // ステップ1: 基本情報
@@ -237,9 +265,9 @@ export default function CertificateCreatePage() {
 
   const steps = [
     { number: 1, title: '基本情報', description: '申請者・物件情報' },
-    { number: 2, title: '工事内容', description: '工事種別の選択' },
-    { number: 3, title: '費用計算', description: '標準的な費用の額' },
-    { number: 4, title: '工事記述', description: '実施した工事の内容' },
+    { number: 2, title: '(1) 工事種別', description: '実施した工事の種別' },
+    { number: 3, title: '(2) 工事内容', description: '実施した工事の内容' },
+    { number: 4, title: '(3) 費用の額', description: '工事の費用の額等' },
     { number: 5, title: '証明者情報', description: '発行者情報' },
     { number: 6, title: '確認・保存', description: 'プレビューと保存' },
   ];
@@ -612,10 +640,18 @@ export default function CertificateCreatePage() {
             </div>
           )}
 
-          {/* ステップ2: 実施した工事の種別（公式様式 第1号～第6号） */}
+          {/* ステップ2: (1) 実施した工事の種別（公式様式 第1号～第6号） */}
           {currentStep === 2 && (
             <div>
-              <h2 className="text-xl font-bold mb-2">(1) 実施した工事の種別</h2>
+              {formData.purposeType && PURPOSE_SECTION_INFO[formData.purposeType as PurposeType] && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs font-semibold text-blue-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
+                  <p className="text-sm font-bold text-blue-900 mt-1">
+                    {PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].sectionNumber}．{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].title}
+                  </p>
+                </div>
+              )}
+              <h2 className="text-xl font-bold mb-2">（１）実施した工事の種別</h2>
               <p className="text-sm text-gray-600 mb-6">
                 公式様式に準拠した工事種別の詳細項目を選択してください。
               </p>
@@ -904,19 +940,18 @@ export default function CertificateCreatePage() {
             </div>
           )}
 
-          {/* ステップ3: 費用計算 */}
+          {/* ステップ3: (2) 実施した工事の内容 */}
           {currentStep === 3 && (
-            <CostCalculationStep
-              selectedWorkTypes={formData.selectedWorkTypes}
-              formState={formData.workDataForm}
-              onChange={(workDataForm) => setFormData(prev => ({ ...prev, workDataForm }))}
-            />
-          )}
-
-          {/* ステップ4: 実施した工事の内容 */}
-          {currentStep === 4 && (
             <div>
-              <h2 className="text-xl font-bold mb-4">実施した工事の内容</h2>
+              {formData.purposeType && PURPOSE_SECTION_INFO[formData.purposeType as PurposeType] && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs font-semibold text-blue-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
+                  <p className="text-sm font-bold text-blue-900 mt-1">
+                    {PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].sectionNumber}．{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].title}
+                  </p>
+                </div>
+              )}
+              <h2 className="text-xl font-bold mb-2">（２）実施した工事の内容</h2>
               <p className="text-sm text-gray-600 mb-6">
                 選択した工事種別ごとに、実施した工事の内容を記入してください。
               </p>
@@ -946,6 +981,25 @@ export default function CertificateCreatePage() {
                   工事種別が選択されていません。ステップ1で工事種別を選択してください。
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ステップ4: (3) 実施した工事の費用の額等 */}
+          {currentStep === 4 && (
+            <div>
+              {formData.purposeType && PURPOSE_SECTION_INFO[formData.purposeType as PurposeType] && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs font-semibold text-blue-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
+                  <p className="text-sm font-bold text-blue-900 mt-1">
+                    {PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].sectionNumber}．{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].title}
+                  </p>
+                </div>
+              )}
+              <CostCalculationStep
+                selectedWorkTypes={formData.selectedWorkTypes}
+                formState={formData.workDataForm}
+                onChange={(workDataForm) => setFormData(prev => ({ ...prev, workDataForm }))}
+              />
             </div>
           )}
 
@@ -986,10 +1040,10 @@ export default function CertificateCreatePage() {
                   </div>
                 </div>
 
-                {/* 工事内容プレビュー */}
+                {/* (1) 工事種別プレビュー */}
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-semibold">工事内容</h3>
+                    <h3 className="font-semibold">(1) 実施した工事の種別</h3>
                     <button type="button" onClick={() => goToStep(2)} className="text-xs text-blue-600">編集</button>
                   </div>
                   <p className="text-sm">
@@ -999,14 +1053,38 @@ export default function CertificateCreatePage() {
                   </p>
                 </div>
 
-                {/* 費用サマリープレビュー */}
+                {/* (2) 工事内容記述プレビュー */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-semibold">(2) 実施した工事の内容</h3>
+                    <button type="button" onClick={() => goToStep(3)} className="text-xs text-blue-600">編集</button>
+                  </div>
+                  {formData.selectedWorkTypes.some(cat => formData.workDescriptions[cat]) ? (
+                    <div className="space-y-1 text-sm">
+                      {formData.selectedWorkTypes.map(cat => {
+                        const desc = formData.workDescriptions[cat];
+                        if (!desc) return null;
+                        return (
+                          <div key={cat}>
+                            <span className="text-gray-500">{WORK_TYPE_LABELS[cat]}:</span>{' '}
+                            <span className="whitespace-pre-wrap">{desc}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">(未入力)</p>
+                  )}
+                </div>
+
+                {/* (3) 費用サマリープレビュー */}
                 {(() => {
                   const costSummary = getCostSummary();
                   return costSummary.totalAmount > 0 ? (
                     <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-semibold">費用計算</h3>
-                        <button type="button" onClick={() => goToStep(3)} className="text-xs text-blue-600">編集</button>
+                        <h3 className="font-semibold">(3) 工事の費用の額</h3>
+                        <button type="button" onClick={() => goToStep(4)} className="text-xs text-blue-600">編集</button>
                       </div>
                       <div className="space-y-1 text-sm">
                         {costSummary.details.map(d => (
@@ -1030,37 +1108,13 @@ export default function CertificateCreatePage() {
                   ) : (
                     <div className="bg-gray-50 rounded-lg p-4">
                       <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-semibold">費用計算</h3>
-                        <button type="button" onClick={() => goToStep(3)} className="text-xs text-blue-600">編集</button>
+                        <h3 className="font-semibold">(3) 工事の費用の額</h3>
+                        <button type="button" onClick={() => goToStep(4)} className="text-xs text-blue-600">編集</button>
                       </div>
                       <p className="text-sm text-gray-500">(費用データなし)</p>
                     </div>
                   );
                 })()}
-
-                {/* 工事内容記述プレビュー */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-semibold">実施した工事の内容</h3>
-                    <button type="button" onClick={() => goToStep(4)} className="text-xs text-blue-600">編集</button>
-                  </div>
-                  {formData.selectedWorkTypes.some(cat => formData.workDescriptions[cat]) ? (
-                    <div className="space-y-1 text-sm">
-                      {formData.selectedWorkTypes.map(cat => {
-                        const desc = formData.workDescriptions[cat];
-                        if (!desc) return null;
-                        return (
-                          <div key={cat}>
-                            <span className="text-gray-500">{WORK_TYPE_LABELS[cat]}:</span>{' '}
-                            <span className="whitespace-pre-wrap">{desc}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">(未入力)</p>
-                  )}
-                </div>
 
                 {/* 証明者情報プレビュー */}
                 <div className="bg-gray-50 rounded-lg p-4">
