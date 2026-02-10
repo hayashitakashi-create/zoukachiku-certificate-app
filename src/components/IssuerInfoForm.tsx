@@ -158,23 +158,25 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
                 placeholder="第123456号"
               />
             </div>
-            {(info?.architectQualification === 'second_class' ||
-              info?.architectQualification === 'wooden') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  登録を受けた都道府県名
-                </label>
-                <input
-                  type="text"
-                  value={info?.architectRegistrationPrefecture || ''}
-                  onChange={(e) =>
-                    onChange({ ...info, architectRegistrationPrefecture: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="東京都"
-                />
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                登録を受けた都道府県名
+                <span className="text-xs text-gray-500 ml-1">（二級建築士又は木造建築士の場合）</span>
+              </label>
+              <input
+                type="text"
+                value={info?.architectRegistrationPrefecture || ''}
+                onChange={(e) =>
+                  onChange({ ...info, architectRegistrationPrefecture: e.target.value })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                placeholder="東京都"
+                disabled={info?.architectQualification === 'first_class'}
+              />
+              {info?.architectQualification === 'first_class' && (
+                <p className="text-xs text-gray-400 mt-1">一級建築士の場合は入力不要です</p>
+              )}
+            </div>
           </div>
         </div>
 
