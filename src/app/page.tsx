@@ -5,13 +5,31 @@ import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { certificateStore, type Certificate } from '@/lib/store';
 
-// 用途ラベル
+// 用途ラベル（カード表示用・短縮版）
 const PURPOSE_LABELS: Record<string, string> = {
-  housing_loan: '住宅借入金等特別控除',
-  reform_tax: '特別税額控除',
-  resale: '既存住宅売買瑕疵保険',
-  property_tax: '固定資産税減額',
+  housing_loan: 'Ⅰ-1 住宅借入金等特別控除',
+  reform_tax: 'Ⅰ-3 住宅特定改修特別税額控除',
+  resale: 'Ⅰ-4 買取再販住宅',
+  property_tax: 'Ⅱ 固定資産税の減額',
 };
+
+// フィルタ定義
+type FilterKey = 'all' | 'housing_loan' | 'reform_tax' | 'resale' | 'property_tax';
+
+interface FilterOption {
+  key: FilterKey;
+  label: string;
+  group: string;       // Ⅰ or Ⅱ
+  purposeTypes: string[]; // マッチする purposeType 一覧
+}
+
+const FILTER_OPTIONS: FilterOption[] = [
+  { key: 'all', label: 'すべて', group: '', purposeTypes: [] },
+  { key: 'housing_loan', label: '１．住宅借入金等特別控除', group: 'Ⅰ', purposeTypes: ['housing_loan'] },
+  { key: 'reform_tax', label: '３．住宅耐震改修特別税額控除／住宅特定改修特別税額控除', group: 'Ⅰ', purposeTypes: ['reform_tax'] },
+  { key: 'resale', label: '４．買取再販住宅', group: 'Ⅰ', purposeTypes: ['resale'] },
+  { key: 'property_tax', label: '固定資産税の減額（1-1 耐震／1-2 認定長期優良／2 熱損失防止）', group: 'Ⅱ', purposeTypes: ['property_tax'] },
+];
 
 // ステータスラベル
 const STATUS_LABELS: Record<string, string> = {
@@ -23,8 +41,17 @@ export default function HomePage() {
   const { data: session } = useSession();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
 
   const userId = session?.user?.id;
+
+  // フィルタ適用後の証明書一覧
+  const filteredCertificates = activeFilter === 'all'
+    ? certificates
+    : certificates.filter(cert => {
+        const option = FILTER_OPTIONS.find(o => o.key === activeFilter);
+        return option ? option.purposeTypes.includes(cert.purposeType) : true;
+      });
 
   const loadCertificates = useCallback(async () => {
     try {
@@ -141,13 +168,89 @@ export default function HomePage() {
           </Link>
         </div>
 
+        {/* 用途フィルタ */}
+        {certificates.length > 0 && (
+          <section className="mb-6">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">証明書の用途で絞り込み</h3>
+              <div className="space-y-2">
+                {/* Ⅰ グループ */}
+                <div>
+                  <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded mr-2">Ⅰ．所得税額の特別控除</span>
+                </div>
+                <div className="flex flex-wrap gap-2 ml-4">
+                  {FILTER_OPTIONS.filter(o => o.group === 'Ⅰ').map(option => {
+                    const count = certificates.filter(c => option.purposeTypes.includes(c.purposeType)).length;
+                    return (
+                      <button
+                        key={option.key}
+                        onClick={() => setActiveFilter(option.key)}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                          activeFilter === option.key
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+                        }`}
+                      >
+                        {option.label}
+                        <span className="ml-1 opacity-70">({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Ⅱ グループ */}
+                <div className="mt-3">
+                  <span className="text-xs font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded mr-2">Ⅱ．固定資産税の減額</span>
+                </div>
+                <div className="flex flex-wrap gap-2 ml-4">
+                  {FILTER_OPTIONS.filter(o => o.group === 'Ⅱ').map(option => {
+                    const count = certificates.filter(c => option.purposeTypes.includes(c.purposeType)).length;
+                    return (
+                      <button
+                        key={option.key}
+                        onClick={() => setActiveFilter(option.key)}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                          activeFilter === option.key
+                            ? 'bg-green-600 text-white border-green-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:border-green-400 hover:text-green-600'
+                        }`}
+                      >
+                        {option.label}
+                        <span className="ml-1 opacity-70">({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* すべてボタン */}
+                <div className="mt-3 pt-2 border-t border-gray-100">
+                  <button
+                    onClick={() => setActiveFilter('all')}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      activeFilter === 'all'
+                        ? 'bg-gray-700 text-white border-gray-700'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+                    }`}
+                  >
+                    すべて表示
+                    <span className="ml-1 opacity-70">({certificates.length})</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* 証明書一覧 */}
         <section>
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             保存済み証明書
             {certificates.length > 0 && (
               <span className="ml-2 text-sm font-normal text-gray-500">
-                ({certificates.length}件)
+                {activeFilter !== 'all'
+                  ? `(${filteredCertificates.length}件 / 全${certificates.length}件)`
+                  : `(${certificates.length}件)`
+                }
               </span>
             )}
           </h2>
@@ -161,9 +264,19 @@ export default function HomePage() {
                 「新しい証明書を作成」ボタンから始めましょう
               </p>
             </div>
+          ) : filteredCertificates.length === 0 ? (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <p className="text-gray-500 mb-2">該当する証明書はありません</p>
+              <button
+                onClick={() => setActiveFilter('all')}
+                className="text-sm text-blue-600 hover:text-blue-800"
+              >
+                フィルタを解除
+              </button>
+            </div>
           ) : (
             <div className="space-y-3">
-              {certificates.map((cert) => (
+              {filteredCertificates.map((cert) => (
                 <div
                   key={cert.id}
                   className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300
