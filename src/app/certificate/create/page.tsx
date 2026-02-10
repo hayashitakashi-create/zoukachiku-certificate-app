@@ -136,6 +136,8 @@ export default function CertificateCreatePage() {
         // 旧データとの互換
         if (!parsed.workDataForm) parsed.workDataForm = {};
         if (!parsed.workDescriptions) parsed.workDescriptions = {};
+        if (!parsed.selectedWorkTypes) parsed.selectedWorkTypes = [];
+        if (!parsed.housingLoanWorkTypes) parsed.housingLoanWorkTypes = {};
         loadedFormData = parsed;
       } catch (error) {
         console.error('Failed to parse saved form data:', error);
