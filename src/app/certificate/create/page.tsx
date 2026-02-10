@@ -136,6 +136,80 @@ const defaultPropertyTaxForm: PropertyTaxFormData = {
   energyLtCertDate: '',
 };
 
+// reform_tax 用の(1)工事の種別フォームデータ
+type ReformTaxWorkTypeForm = {
+  // ① 耐震改修
+  seismic: {
+    buildingStandard: boolean;  // 建築基準法施行令の規定
+    earthquakeSafety: boolean;  // 地震に対する安全性に係る基準
+  };
+  // ② バリアフリー改修
+  barrierFree: {
+    pathwayExpansion: boolean;     // 通路又は出入口の拡幅
+    stairSlope: boolean;           // 階段の勾配の緩和
+    bathroomImprovement: boolean;  // 浴室の改良
+    toiletImprovement: boolean;    // 便所の改良
+    handrails: boolean;            // 手すりの設置
+    stepElimination: boolean;      // 床の段差の解消
+    doorImprovement: boolean;      // 出入口戸の改良
+    floorSlipPrevention: boolean;  // 床材の滑り改良
+  };
+  // ③ 省エネ改修
+  energySaving: {
+    allWindowsInsulation: boolean;         // 全ての居室の全ての窓の断熱性を高める工事
+    ceilingInsulation: boolean;            // 天井等の断熱性を高める工事
+    wallInsulation: boolean;               // 壁の断熱性を高める工事
+    floorInsulation: boolean;              // 床等の断熱性を高める工事
+    hasSolarPower: boolean;                // 太陽光発電設備設置
+  };
+  // ④ 同居対応改修
+  cohabitation: {
+    kitchen: boolean;    // キッチンの増設
+    bathroom: boolean;   // 浴室の増設
+    toilet: boolean;     // 便所の増設
+    entrance: boolean;   // 玄関の増設
+  };
+  // ⑤⑥ 長期優良住宅化改修
+  longTermHousing: {
+    structuralDurability: boolean;   // 構造躯体の劣化対策
+    earthquakeResistance: boolean;   // 耐震性の向上
+    energyEfficiency: boolean;       // 省エネルギー対策
+    maintenanceEase: boolean;        // 維持管理・更新の容易性
+    isExcellentHousing: boolean;     // 認定長期優良住宅に該当
+  };
+  // ⑦ 子育て対応改修
+  childcare: {
+    fenceInstallation: boolean;      // 転落防止柵の設置
+    doorSafety: boolean;             // 開戸の安全装置設置
+    fingerProtection: boolean;       // 引戸への指挟み防止措置
+    cornerProtection: boolean;       // 角部の面取り
+    fixedFurniture: boolean;         // 家具固定金具の設置
+    floorSoftening: boolean;         // 床の衝撃緩和
+  };
+};
+
+const defaultReformTaxWorkTypeForm: ReformTaxWorkTypeForm = {
+  seismic: { buildingStandard: false, earthquakeSafety: false },
+  barrierFree: {
+    pathwayExpansion: false, stairSlope: false, bathroomImprovement: false,
+    toiletImprovement: false, handrails: false, stepElimination: false,
+    doorImprovement: false, floorSlipPrevention: false,
+  },
+  energySaving: {
+    allWindowsInsulation: false, ceilingInsulation: false,
+    wallInsulation: false, floorInsulation: false, hasSolarPower: false,
+  },
+  cohabitation: { kitchen: false, bathroom: false, toilet: false, entrance: false },
+  longTermHousing: {
+    structuralDurability: false, earthquakeResistance: false,
+    energyEfficiency: false, maintenanceEase: false, isExcellentHousing: false,
+  },
+  childcare: {
+    fenceInstallation: false, doorSafety: false, fingerProtection: false,
+    cornerProtection: false, fixedFurniture: false, floorSoftening: false,
+  },
+};
+
 // フォームデータの型定義
 type CertificateFormData = {
   // ステップ1: 基本情報
@@ -155,6 +229,9 @@ type CertificateFormData = {
 
   // ステップ2: 工事種別詳細（公式様式の第1号～第6号）
   housingLoanWorkTypes: HousingLoanWorkTypes;
+
+  // reform_tax 用の工事種別詳細
+  reformTaxWorkTypes: ReformTaxWorkTypeForm;
 
   // 固定資産税用詳細フォーム
   propertyTaxForm: PropertyTaxFormData;
@@ -192,6 +269,7 @@ export default function CertificateCreatePage() {
     purposeType: '',
     selectedWorkTypes: [],
     housingLoanWorkTypes: {},
+    reformTaxWorkTypes: { ...defaultReformTaxWorkTypeForm },
     propertyTaxForm: { ...defaultPropertyTaxForm },
     workDataForm: {},
     workDescriptions: {},
@@ -245,6 +323,7 @@ export default function CertificateCreatePage() {
         if (!parsed.workDescriptions) parsed.workDescriptions = {};
         if (!parsed.selectedWorkTypes) parsed.selectedWorkTypes = [];
         if (!parsed.housingLoanWorkTypes) parsed.housingLoanWorkTypes = {};
+        if (!parsed.reformTaxWorkTypes) parsed.reformTaxWorkTypes = { ...defaultReformTaxWorkTypeForm };
         if (!parsed.propertyTaxForm) parsed.propertyTaxForm = { ...defaultPropertyTaxForm };
         loadedFormData = parsed;
       } catch (error) {
@@ -1142,8 +1221,206 @@ export default function CertificateCreatePage() {
                 </div>
               )}
 
-              {/* === 所得税控除用フォーム（housing_loan, reform_tax, resale） === */}
-              {formData.purposeType !== 'property_tax' && (
+              {/* === reform_tax 専用フォーム（セクションIII 工事の種別） === */}
+              {formData.purposeType === 'reform_tax' && (
+                <div className="space-y-5">
+                  {/* ① 耐震改修（selectedWorkTypesに含まれる場合のみ） */}
+                  {formData.selectedWorkTypes.includes('seismic') && (
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <h3 className="font-bold text-sm mb-3">① 住宅耐震改修</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {([
+                          ['buildingStandard', '建築基準法施行令第3章及び第5章の4の規定に適合させるもの'],
+                          ['earthquakeSafety', '地震に対する安全性に係る基準に適合させるもの'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-start space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 mt-0.5 text-blue-600 rounded"
+                              checked={formData.reformTaxWorkTypes.seismic[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  seismic: { ...prev.reformTaxWorkTypes.seismic, [key]: e.target.checked },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ② バリアフリー改修 */}
+                  {formData.selectedWorkTypes.includes('barrierFree') && (
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <h3 className="font-bold text-sm mb-3">② 高齢者等居住改修工事等（バリアフリー改修工事）</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {([
+                          ['pathwayExpansion', '1 通路又は出入口の拡幅'],
+                          ['stairSlope', '2 階段の勾配の緩和'],
+                          ['bathroomImprovement', '3 浴室の改良'],
+                          ['toiletImprovement', '4 便所の改良'],
+                          ['handrails', '5 手すりの設置'],
+                          ['stepElimination', '6 床の段差の解消'],
+                          ['doorImprovement', '7 出入口戸の改良'],
+                          ['floorSlipPrevention', '8 床材の滑りの防止'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                              checked={formData.reformTaxWorkTypes.barrierFree[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  barrierFree: { ...prev.reformTaxWorkTypes.barrierFree, [key]: e.target.checked },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ③ 省エネ改修 */}
+                  {formData.selectedWorkTypes.includes('energySaving') && (
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <h3 className="font-bold text-sm mb-3">③ 一般断熱改修工事等（省エネ改修工事）</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {([
+                          ['allWindowsInsulation', '1 全ての居室の全ての窓の断熱性を高める工事'],
+                          ['ceilingInsulation', '2 天井等の断熱性を高める工事'],
+                          ['wallInsulation', '3 壁の断熱性を高める工事'],
+                          ['floorInsulation', '4 床等の断熱性を高める工事'],
+                          ['hasSolarPower', '5 太陽光発電設備の設置工事'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                              checked={formData.reformTaxWorkTypes.energySaving[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  energySaving: { ...prev.reformTaxWorkTypes.energySaving, [key]: e.target.checked },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ④ 同居対応改修 */}
+                  {formData.selectedWorkTypes.includes('cohabitation') && (
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <h3 className="font-bold text-sm mb-3">④ 多世帯同居改修工事等</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {([
+                          ['kitchen', '1 キッチンの増設'],
+                          ['bathroom', '2 浴室の増設'],
+                          ['toilet', '3 便所の増設'],
+                          ['entrance', '4 玄関の増設'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                              checked={formData.reformTaxWorkTypes.cohabitation[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  cohabitation: { ...prev.reformTaxWorkTypes.cohabitation, [key]: e.target.checked },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ⑤⑥ 長期優良住宅化改修 */}
+                  {formData.selectedWorkTypes.includes('longTermHousing') && (
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <h3 className="font-bold text-sm mb-3">⑤⑥ 耐久性向上改修工事等（長期優良住宅化改修）</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {([
+                          ['structuralDurability', '1 構造躯体等の劣化対策'],
+                          ['earthquakeResistance', '2 耐震性の向上'],
+                          ['energyEfficiency', '3 省エネルギー対策'],
+                          ['maintenanceEase', '4 維持管理・更新の容易性'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                              checked={formData.reformTaxWorkTypes.longTermHousing[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, [key]: e.target.checked },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <label className="flex items-center space-x-2 text-sm">
+                          <input type="checkbox" className="w-4 h-4 text-green-600 rounded"
+                            checked={formData.reformTaxWorkTypes.longTermHousing.isExcellentHousing}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, isExcellentHousing: e.target.checked },
+                              },
+                            }))} />
+                          <span className="font-medium text-green-800">認定長期優良住宅に該当する（⑥耐震及び省エネの両方と併せて行う場合）</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ⑦ 子育て対応改修 */}
+                  {formData.selectedWorkTypes.includes('childcare') && (
+                    <div className="p-4 border border-gray-200 rounded-lg">
+                      <h3 className="font-bold text-sm mb-3">⑦ 子育て対応改修工事等</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {([
+                          ['fenceInstallation', '1 転落防止柵の設置'],
+                          ['doorSafety', '2 開戸の安全装置の設置'],
+                          ['fingerProtection', '3 引戸への指挟み防止措置'],
+                          ['cornerProtection', '4 角部の面取り'],
+                          ['fixedFurniture', '5 家具固定金具の設置'],
+                          ['floorSoftening', '6 床の衝撃緩和'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                              checked={formData.reformTaxWorkTypes.childcare[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  childcare: { ...prev.reformTaxWorkTypes.childcare, [key]: e.target.checked },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.selectedWorkTypes.length === 0 && (
+                    <div className="text-center py-8 text-gray-400">
+                      ステップ1で工事種別を選択すると、該当する工事の詳細項目が表示されます。
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* === 所得税控除用フォーム（housing_loan, resale） === */}
+              {(formData.purposeType === 'housing_loan' || formData.purposeType === 'resale') && (
               <>
               {/* 第1号工事 */}
               <div className="mb-5 p-4 border border-gray-200 rounded-lg">
