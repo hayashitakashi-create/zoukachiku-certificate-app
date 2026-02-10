@@ -541,11 +541,11 @@ export default function CertificateCreatePage() {
         }
       }
 
-      // housingLoanDetail の構築（housing_loan の場合のみ）
+      // housingLoanDetail の構築（housing_loan, resale の場合）
       // workTypes は詳細型（Work1Type等）をそのまま保存し、PDF生成時に参照する
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let housingLoanDetail: any = null;
-      if (formData.purposeType === 'housing_loan') {
+      if (formData.purposeType === 'housing_loan' || formData.purposeType === 'resale') {
         const deductible = Math.max(0, totalWorkCost - totalSubsidy);
         housingLoanDetail = {
           workTypes: formData.housingLoanWorkTypes,

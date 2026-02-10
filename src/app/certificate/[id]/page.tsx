@@ -261,12 +261,21 @@ export default function CertificateDetailPage({
           const totalSubsidy = certificate.subsidyAmount || 0;
           const deductible = Math.max(0, totalWorkCost - totalSubsidy);
 
+          const rsDetail = certificate.housingLoanDetail;
           pdfBytes = await generateResalePDF({
             ...baseData,
             totalWorkCost,
             hasSubsidy: totalSubsidy > 0,
             subsidyAmount: totalSubsidy,
             deductibleAmount: deductible,
+            housingLoanDetail: rsDetail ? {
+              workTypes: rsDetail.workTypes,
+              workDescription: rsDetail.workDescription || null,
+              totalCost: rsDetail.totalCost,
+              hasSubsidy: rsDetail.subsidyAmount > 0,
+              subsidyAmount: rsDetail.subsidyAmount,
+              deductibleAmount: rsDetail.deductibleAmount,
+            } : null,
           });
           filePrefix = 'resale';
           break;
