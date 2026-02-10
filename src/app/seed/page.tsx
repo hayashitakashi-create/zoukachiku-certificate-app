@@ -527,11 +527,16 @@ function makeCert(input: CertInput, index: number): Certificate {
 
 export default function SeedPage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
+    // セッション読み込み中は待機
+    if (sessionStatus === 'loading') return;
+    // 既に実行済みなら再実行しない
+    if (status !== 'idle') return;
+
     async function seed() {
       setStatus('loading');
       try {
@@ -548,7 +553,8 @@ export default function SeedPage() {
           await db.certificates.add(cert);
         }
 
-        setMessage(`${certs.length}件の証明書を登録しました（工事・証明者情報入り）。3秒後にトップページへ移動します。`);
+        const userInfo = userId ? `（ユーザーID: ${userId}）` : '（ゲストモード）';
+        setMessage(`${certs.length}件の証明書を登録しました${userInfo}。3秒後にトップページへ移動します。`);
         setStatus('done');
 
         // ゲストモードcookieもセット
@@ -563,7 +569,7 @@ export default function SeedPage() {
     }
 
     seed();
-  }, [router]);
+  }, [sessionStatus, session, router, status]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
