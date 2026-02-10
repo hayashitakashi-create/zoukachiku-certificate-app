@@ -151,6 +151,10 @@ export interface Certificate {
   // 住宅ローン詳細（housing_loan の場合のみ）
   housingLoanDetail: HousingLoanDetail | null;
 
+  // リフォーム促進税制詳細（reform_tax の場合のみ）
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  reformTaxDetail?: any;
+
   // タイムスタンプ
   createdAt: string;               // ISO 8601
   updatedAt: string;               // ISO 8601

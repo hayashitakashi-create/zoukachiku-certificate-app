@@ -169,77 +169,84 @@ export default function CertificateDetailPage({
           break;
         }
         case 'reform_tax': {
-          const rtWorks = certificate.works;
-          // 各工事の計算結果をWorkCostData形式に変換
-          const toWorkCost = (summary: { totalAmount: number; subsidyAmount: number; deductibleAmount: number } | null, limit: number) => {
-            if (!summary) return undefined;
-            const maxDeduction = Math.min(summary.deductibleAmount, limit);
-            return {
-              totalAmount: summary.totalAmount,
-              subsidyAmount: summary.subsidyAmount,
-              deductibleAmount: summary.deductibleAmount,
-              maxDeduction,
-              excessAmount: Math.max(0, summary.deductibleAmount - maxDeduction),
+          // reformTaxDetail が保存済みならそのまま使用（新フォームから保存された場合）
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rtDetail = (certificate as any).reformTaxDetail;
+          if (rtDetail) {
+            pdfBytes = await generateReformTaxPDF({
+              ...baseData,
+              ...rtDetail,
+            });
+          } else {
+            // 旧データ互換: works から再計算
+            const rtWorks = certificate.works;
+            const toWorkCost = (summary: { totalAmount: number; subsidyAmount: number; deductibleAmount: number } | null, limit: number) => {
+              if (!summary) return undefined;
+              const maxDeduction = Math.min(summary.deductibleAmount, limit);
+              return {
+                totalAmount: summary.totalAmount,
+                subsidyAmount: summary.subsidyAmount,
+                deductibleAmount: summary.deductibleAmount,
+                maxDeduction,
+                excessAmount: Math.max(0, summary.deductibleAmount - maxDeduction),
+              };
             };
-          };
 
-          const hasSolar = rtWorks.energySaving.summary?.hasSolarPower || false;
-          const energyLimit = hasSolar ? 3_500_000 : 2_500_000;
+            const hasSolar = rtWorks.energySaving.summary?.hasSolarPower || false;
+            const energyLimit = hasSolar ? 3_500_000 : 2_500_000;
 
-          // 長期優良住宅化: isExcellentHousing で OR(⑤)/AND(⑥) を判定
-          const ltSummary = rtWorks.longTermHousing.summary;
-          const isExcellent = ltSummary?.isExcellentHousing || false;
+            const ltSummary = rtWorks.longTermHousing.summary;
+            const isExcellent = ltSummary?.isExcellentHousing || false;
 
-          let longTermHousingOr: ReturnType<typeof toWorkCost> = undefined;
-          let longTermHousingAnd: ReturnType<typeof toWorkCost> & { isExcellentHousing?: boolean } | undefined = undefined;
+            let longTermHousingOr: ReturnType<typeof toWorkCost> = undefined;
+            let longTermHousingAnd: ReturnType<typeof toWorkCost> & { isExcellentHousing?: boolean } | undefined = undefined;
 
-          if (ltSummary && ltSummary.deductibleAmount > 0) {
-            if (isExcellent) {
-              // AND型(⑥): 太陽光無=500万, 太陽光有=600万
-              const andLimit = hasSolar ? 6_000_000 : 5_000_000;
-              const maxDed = Math.min(ltSummary.deductibleAmount, andLimit);
-              longTermHousingAnd = {
-                totalAmount: ltSummary.totalAmount,
-                subsidyAmount: ltSummary.subsidyAmount,
-                deductibleAmount: ltSummary.deductibleAmount,
-                maxDeduction: maxDed,
-                excessAmount: Math.max(0, ltSummary.deductibleAmount - maxDed),
-                isExcellentHousing: true,
-              };
-            } else {
-              // OR型(⑤): 太陽光無=250万, 太陽光有=350万
-              const orLimit = hasSolar ? 3_500_000 : 2_500_000;
-              const maxDed = Math.min(ltSummary.deductibleAmount, orLimit);
-              longTermHousingOr = {
-                totalAmount: ltSummary.totalAmount,
-                subsidyAmount: ltSummary.subsidyAmount,
-                deductibleAmount: ltSummary.deductibleAmount,
-                maxDeduction: maxDed,
-                excessAmount: Math.max(0, ltSummary.deductibleAmount - maxDed),
-              };
+            if (ltSummary && ltSummary.deductibleAmount > 0) {
+              if (isExcellent) {
+                const andLimit = hasSolar ? 6_000_000 : 5_000_000;
+                const maxDed = Math.min(ltSummary.deductibleAmount, andLimit);
+                longTermHousingAnd = {
+                  totalAmount: ltSummary.totalAmount,
+                  subsidyAmount: ltSummary.subsidyAmount,
+                  deductibleAmount: ltSummary.deductibleAmount,
+                  maxDeduction: maxDed,
+                  excessAmount: Math.max(0, ltSummary.deductibleAmount - maxDed),
+                  isExcellentHousing: true,
+                };
+              } else {
+                const orLimit = hasSolar ? 3_500_000 : 2_500_000;
+                const maxDed = Math.min(ltSummary.deductibleAmount, orLimit);
+                longTermHousingOr = {
+                  totalAmount: ltSummary.totalAmount,
+                  subsidyAmount: ltSummary.subsidyAmount,
+                  deductibleAmount: ltSummary.deductibleAmount,
+                  maxDeduction: maxDed,
+                  excessAmount: Math.max(0, ltSummary.deductibleAmount - maxDed),
+                };
+              }
             }
-          }
 
-          pdfBytes = await generateReformTaxPDF({
-            ...baseData,
-            seismic: toWorkCost(rtWorks.seismic.summary, 2_500_000),
-            barrierFree: toWorkCost(rtWorks.barrierFree.summary, 2_000_000),
-            energySaving: rtWorks.energySaving.summary ? {
-              ...toWorkCost(rtWorks.energySaving.summary, energyLimit)!,
-              hasSolarPower: hasSolar,
-            } : undefined,
-            cohabitation: toWorkCost(rtWorks.cohabitation.summary, 2_500_000),
-            childcare: toWorkCost(rtWorks.childcare.summary, 2_500_000),
-            longTermHousingOr,
-            longTermHousingAnd: longTermHousingAnd as typeof longTermHousingAnd & { isExcellentHousing: boolean } | undefined,
-            otherRenovation: rtWorks.otherRenovation.summary ? {
-              totalAmount: rtWorks.otherRenovation.summary.totalAmount,
-              subsidyAmount: rtWorks.otherRenovation.summary.subsidyAmount,
-              deductibleAmount: rtWorks.otherRenovation.summary.deductibleAmount,
-              maxDeduction: rtWorks.otherRenovation.summary.deductibleAmount,
-              excessAmount: 0,
-            } : undefined,
-          });
+            pdfBytes = await generateReformTaxPDF({
+              ...baseData,
+              seismic: toWorkCost(rtWorks.seismic.summary, 2_500_000),
+              barrierFree: toWorkCost(rtWorks.barrierFree.summary, 2_000_000),
+              energySaving: rtWorks.energySaving.summary ? {
+                ...toWorkCost(rtWorks.energySaving.summary, energyLimit)!,
+                hasSolarPower: hasSolar,
+              } : undefined,
+              cohabitation: toWorkCost(rtWorks.cohabitation.summary, 2_500_000),
+              childcare: toWorkCost(rtWorks.childcare.summary, 2_500_000),
+              longTermHousingOr,
+              longTermHousingAnd: longTermHousingAnd as typeof longTermHousingAnd & { isExcellentHousing: boolean } | undefined,
+              otherRenovation: rtWorks.otherRenovation.summary ? {
+                totalAmount: rtWorks.otherRenovation.summary.totalAmount,
+                subsidyAmount: rtWorks.otherRenovation.summary.subsidyAmount,
+                deductibleAmount: rtWorks.otherRenovation.summary.deductibleAmount,
+                maxDeduction: rtWorks.otherRenovation.summary.deductibleAmount,
+                excessAmount: 0,
+              } : undefined,
+            });
+          }
           filePrefix = 'reform-tax';
           break;
         }

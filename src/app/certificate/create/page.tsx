@@ -149,43 +149,205 @@ type ReformTaxWorkTypeForm = {
     stairSlope: boolean;           // 階段の勾配の緩和
     bathroomImprovement: boolean;  // 浴室の改良
     toiletImprovement: boolean;    // 便所の改良
-    handrails: boolean;            // 手すりの設置
+    handrails: boolean;            // 手すりの取付
     stepElimination: boolean;      // 床の段差の解消
     doorImprovement: boolean;      // 出入口戸の改良
-    floorSlipPrevention: boolean;  // 床材の滑り改良
+    floorSlipPrevention: boolean;  // 床材の取替
   };
   // ③ 省エネ改修
   energySaving: {
-    allWindowsInsulation: boolean;         // 全ての居室の全ての窓の断熱性を高める工事
-    ceilingInsulation: boolean;            // 天井等の断熱性を高める工事
-    wallInsulation: boolean;               // 壁の断熱性を高める工事
-    floorInsulation: boolean;              // 床等の断熱性を高める工事
-    hasSolarPower: boolean;                // 太陽光発電設備設置
+    // A. 窓の断熱改修工事パターン
+    windowInsulation: boolean;        // 1 窓の断熱性を高める工事
+    ceilingInsulation: boolean;       // 2 天井等
+    wallInsulation: boolean;          // 3 壁
+    floorInsulation: boolean;         // 4 床等
+    regionCode: string;               // 地域区分 (1-8, '' = 未選択)
+    // B. 認定低炭素建築物パターン
+    lowCarbon: {
+      windowInsulation: boolean;
+      ceilingInsulation: boolean;
+      wallInsulation: boolean;
+      floorInsulation: boolean;
+      certAuthority: string;
+      certNumber: string;
+      certDate: string;
+    };
+    // C. 設備型式
+    equipmentTypes: {
+      solarHeat: string;              // 太陽熱利用冷温熱装置の型式
+      latentHeatRecovery: string;     // 潜熱回収型給湯器の型式
+      heatPump: string;               // ヒートポンプ式電気給湯器の型式
+      fuelCell: string;               // 燃料電池コージェネレーションの型式
+      gasEngine: string;              // ガスエンジン給湯器の型式
+      airConditioner: string;         // エアコンディショナーの型式
+      solarPower: string;             // 太陽光発電設備の型式
+    };
+    // D. 追加工事（有/無/未回答）
+    additionalWorks: {
+      safetyWork: string;             // 安全対策工事 ('yes'|'no'|'')
+      roofWaterproofing: string;      // 陸屋根防水基礎工事
+      snowProtection: string;         // 積雪対策工事
+      saltProtection: string;         // 塩害対策工事
+      trunkLineReinforcement: string; // 幹線増強工事
+    };
   };
   // ④ 同居対応改修
   cohabitation: {
-    kitchen: boolean;    // キッチンの増設
-    bathroom: boolean;   // 浴室の増設
-    toilet: boolean;     // 便所の増設
-    entrance: boolean;   // 玄関の増設
+    kitchen: boolean;    // 1 調理室増設
+    bathroom: boolean;   // 2 浴室増設
+    toilet: boolean;     // 3 便所増設
+    entrance: boolean;   // 4 玄関増設
+    countBefore: { kitchen: number; bathroom: number; toilet: number; entrance: number };
+    countAfter: { kitchen: number; bathroom: number; toilet: number; entrance: number };
   };
-  // ⑤⑥ 長期優良住宅化改修
+  // ⑤ 耐久性向上改修工事等
   longTermHousing: {
-    structuralDurability: boolean;   // 構造躯体の劣化対策
-    earthquakeResistance: boolean;   // 耐震性の向上
-    energyEfficiency: boolean;       // 省エネルギー対策
-    maintenanceEase: boolean;        // 維持管理・更新の容易性
-    isExcellentHousing: boolean;     // 認定長期優良住宅に該当
+    atticVentilation: boolean;        // 1 小屋裏の換気工事
+    atticInspection: boolean;         // 2 小屋裏点検口の取付工事
+    wallVentilation: boolean;         // 3 外壁の通気構造等工事
+    bathroomWaterproof: boolean;      // 4 浴室又は脱衣室の防水工事
+    foundationAntiDecay: boolean;     // 5 土台の防腐・防蟻工事
+    wallFrameAntiDecay: boolean;      // 6 外壁の軸組等の防腐・防蟻工事
+    underfloorMoisture: boolean;      // 7 床下の防湿工事
+    underfloorInspection: boolean;    // 8 床下点検口の取付工事
+    gutterInstallation: boolean;      // 9 雨どいの取付工事
+    groundAntiTermite: boolean;       // 10 地盤の防蟻工事
+    pipingMaintenance: boolean;       // 11 給水管・給湯管又は排水管の維持管理又は更新の容易化工事
+    certAuthority: string;            // 認定主体
+    certNumber: string;               // 認定番号
+    certDate: string;                 // 認定年月日
+    isExcellentHousing: boolean;      // 認定長期優良住宅（⑥=耐震AND省エネの両方）
   };
-  // ⑦ 子育て対応改修
+  // ⑥ 子育て対応改修
   childcare: {
-    fenceInstallation: boolean;      // 転落防止柵の設置
-    doorSafety: boolean;             // 開戸の安全装置設置
-    fingerProtection: boolean;       // 引戸への指挟み防止措置
-    cornerProtection: boolean;       // 角部の面取り
-    fixedFurniture: boolean;         // 家具固定金具の設置
-    floorSoftening: boolean;         // 床の衝撃緩和
+    accidentPrevention: boolean;      // 1 子どもの事故を防止するための工事
+    counterKitchen: boolean;          // 2 対面式キッチンへの交換工事
+    securityImprovement: boolean;     // 3 開口部の防犯性を高める工事
+    storageIncrease: boolean;         // 4 収納設備を増設する工事
+    soundproofing: boolean;           // 5 開口部・界壁・界床の防音性を高める工事
+    layoutChange: boolean;            // 6 間取り変更工事
   };
+  // 併せて行う第1号〜第6号工事
+  additionalWorks: {
+    work1: { extension: boolean; renovation: boolean; majorRepair: boolean; majorRemodeling: boolean };
+    work2: { floor: boolean; stairs: boolean; partition: boolean; wall: boolean };
+    work3: { livingRoom: boolean; kitchen: boolean; bathroom: boolean; toilet: boolean; washroom: boolean; storage: boolean; entrance: boolean; corridor: boolean };
+    work4: { buildingStandard: boolean; earthquakeSafety: boolean };
+    work5: { pathwayExpansion: boolean; stairSlope: boolean; bathroomImprovement: boolean; toiletImprovement: boolean; handrails: boolean; stepElimination: boolean; doorImprovement: boolean; floorReplacement: boolean };
+    work6: {
+      // A. 全居室窓断熱
+      windowInsulationType: string;   // '1'|'2'|'3'|''
+      ceilingInsulation: boolean;
+      wallInsulation: boolean;
+      floorInsulation: boolean;
+      regionCode: string;
+      energyGradeBefore: string;
+      // B. 認定低炭素建築物
+      lowCarbon: {
+        windowInsulation: boolean;
+        ceilingInsulation: boolean;
+        wallInsulation: boolean;
+        floorInsulation: boolean;
+        certAuthority: string;
+        certNumber: string;
+        certDate: string;
+      };
+      // C. 住宅性能評価書
+      performanceEval: {
+        windowInsulation: boolean;
+        ceilingInsulation: boolean;
+        wallInsulation: boolean;
+        floorInsulation: boolean;
+        regionCode: string;
+        energyGradeBefore: string;    // '1'|'2'|'3'
+        energyGradeAfter: string;     // '1'|'2'|'3' (等級2/等級3/等級4以上)
+        evalAgencyName: string;
+        evalRegistrationNumber: string;
+        evalCertNumber: string;
+        evalCertDate: string;
+      };
+      // D. 長期優良住宅認定
+      longTermCert: {
+        windowInsulation: boolean;
+        ceilingInsulation: boolean;
+        wallInsulation: boolean;
+        floorInsulation: boolean;
+        regionCode: string;
+        energyGradeBefore: string;    // '1'|'2'|'3'
+        energyGradeAfter: string;     // '1'|'2' (等級3/等級4以上)
+        certAuthority: string;
+        certNumber: string;
+        certDate: string;
+      };
+    };
+  };
+};
+
+// reform_tax 用の(3)費用の額等フォームデータ
+type ReformTaxCostCategory = {
+  totalAmount: number;      // ア: 工事費総額
+  hasSubsidy: boolean;      // イ: 補助金の有無
+  subsidyAmount: number;    // イ: 補助金額
+};
+
+type ReformTaxCostCompound5 = {
+  baseTotalAmount: number;            // ア
+  baseHasSubsidy: boolean;            // イ有無
+  baseSubsidyAmount: number;          // イ額
+  durabilityTotalAmount: number;      // エ
+  durabilityHasSubsidy: boolean;      // オ有無
+  durabilitySubsidyAmount: number;    // オ額
+};
+
+type ReformTaxCostCompound6 = {
+  seismicTotalAmount: number;         // ア
+  seismicHasSubsidy: boolean;         // イ有無
+  seismicSubsidyAmount: number;       // イ額
+  energyTotalAmount: number;          // エ
+  energyHasSubsidy: boolean;          // オ有無
+  energySubsidyAmount: number;        // オ額
+  durabilityTotalAmount: number;      // キ
+  durabilityHasSubsidy: boolean;      // ク有無
+  durabilitySubsidyAmount: number;    // ク額
+};
+
+type ReformTaxCostForm = {
+  seismic: ReformTaxCostCategory;            // ①: ア-オ
+  barrierFree: ReformTaxCostCategory;        // ②: ア-オ
+  energySaving: ReformTaxCostCategory & { hasSolarPower: boolean }; // ③: ア-オ
+  cohabitation: ReformTaxCostCategory;       // ④: ア-オ
+  longTermOr: ReformTaxCostCompound5;        // ⑤: ア-ケ（9フィールド）
+  longTermAnd: ReformTaxCostCompound6;       // ⑥: ア-シ（12フィールド）
+  childcare: ReformTaxCostCategory;          // ⑦: ア-オ
+  otherRenovation: ReformTaxCostCategory;    // ⑳: ア-ウ（上限なし）
+};
+
+const defaultReformTaxCostCategory: ReformTaxCostCategory = {
+  totalAmount: 0,
+  hasSubsidy: false,
+  subsidyAmount: 0,
+};
+
+const defaultReformTaxCostCompound5: ReformTaxCostCompound5 = {
+  baseTotalAmount: 0, baseHasSubsidy: false, baseSubsidyAmount: 0,
+  durabilityTotalAmount: 0, durabilityHasSubsidy: false, durabilitySubsidyAmount: 0,
+};
+
+const defaultReformTaxCostCompound6: ReformTaxCostCompound6 = {
+  seismicTotalAmount: 0, seismicHasSubsidy: false, seismicSubsidyAmount: 0,
+  energyTotalAmount: 0, energyHasSubsidy: false, energySubsidyAmount: 0,
+  durabilityTotalAmount: 0, durabilityHasSubsidy: false, durabilitySubsidyAmount: 0,
+};
+
+const defaultReformTaxCostForm: ReformTaxCostForm = {
+  seismic: { ...defaultReformTaxCostCategory },
+  barrierFree: { ...defaultReformTaxCostCategory },
+  energySaving: { ...defaultReformTaxCostCategory, hasSolarPower: false },
+  cohabitation: { ...defaultReformTaxCostCategory },
+  longTermOr: { ...defaultReformTaxCostCompound5 },
+  longTermAnd: { ...defaultReformTaxCostCompound6 },
+  childcare: { ...defaultReformTaxCostCategory },
+  otherRenovation: { ...defaultReformTaxCostCategory },
 };
 
 const defaultReformTaxWorkTypeForm: ReformTaxWorkTypeForm = {
@@ -196,17 +358,63 @@ const defaultReformTaxWorkTypeForm: ReformTaxWorkTypeForm = {
     doorImprovement: false, floorSlipPrevention: false,
   },
   energySaving: {
-    allWindowsInsulation: false, ceilingInsulation: false,
-    wallInsulation: false, floorInsulation: false, hasSolarPower: false,
+    windowInsulation: false, ceilingInsulation: false,
+    wallInsulation: false, floorInsulation: false, regionCode: '',
+    lowCarbon: {
+      windowInsulation: false, ceilingInsulation: false,
+      wallInsulation: false, floorInsulation: false,
+      certAuthority: '', certNumber: '', certDate: '',
+    },
+    equipmentTypes: {
+      solarHeat: '', latentHeatRecovery: '', heatPump: '',
+      fuelCell: '', gasEngine: '', airConditioner: '', solarPower: '',
+    },
+    additionalWorks: {
+      safetyWork: '', roofWaterproofing: '', snowProtection: '',
+      saltProtection: '', trunkLineReinforcement: '',
+    },
   },
-  cohabitation: { kitchen: false, bathroom: false, toilet: false, entrance: false },
+  cohabitation: {
+    kitchen: false, bathroom: false, toilet: false, entrance: false,
+    countBefore: { kitchen: 0, bathroom: 0, toilet: 0, entrance: 0 },
+    countAfter: { kitchen: 0, bathroom: 0, toilet: 0, entrance: 0 },
+  },
   longTermHousing: {
-    structuralDurability: false, earthquakeResistance: false,
-    energyEfficiency: false, maintenanceEase: false, isExcellentHousing: false,
+    atticVentilation: false, atticInspection: false, wallVentilation: false,
+    bathroomWaterproof: false, foundationAntiDecay: false, wallFrameAntiDecay: false,
+    underfloorMoisture: false, underfloorInspection: false, gutterInstallation: false,
+    groundAntiTermite: false, pipingMaintenance: false,
+    certAuthority: '', certNumber: '', certDate: '',
+    isExcellentHousing: false,
   },
   childcare: {
-    fenceInstallation: false, doorSafety: false, fingerProtection: false,
-    cornerProtection: false, fixedFurniture: false, floorSoftening: false,
+    accidentPrevention: false, counterKitchen: false, securityImprovement: false,
+    storageIncrease: false, soundproofing: false, layoutChange: false,
+  },
+  additionalWorks: {
+    work1: { extension: false, renovation: false, majorRepair: false, majorRemodeling: false },
+    work2: { floor: false, stairs: false, partition: false, wall: false },
+    work3: { livingRoom: false, kitchen: false, bathroom: false, toilet: false, washroom: false, storage: false, entrance: false, corridor: false },
+    work4: { buildingStandard: false, earthquakeSafety: false },
+    work5: { pathwayExpansion: false, stairSlope: false, bathroomImprovement: false, toiletImprovement: false, handrails: false, stepElimination: false, doorImprovement: false, floorReplacement: false },
+    work6: {
+      windowInsulationType: '', ceilingInsulation: false, wallInsulation: false, floorInsulation: false,
+      regionCode: '', energyGradeBefore: '',
+      lowCarbon: {
+        windowInsulation: false, ceilingInsulation: false, wallInsulation: false, floorInsulation: false,
+        certAuthority: '', certNumber: '', certDate: '',
+      },
+      performanceEval: {
+        windowInsulation: false, ceilingInsulation: false, wallInsulation: false, floorInsulation: false,
+        regionCode: '', energyGradeBefore: '', energyGradeAfter: '',
+        evalAgencyName: '', evalRegistrationNumber: '', evalCertNumber: '', evalCertDate: '',
+      },
+      longTermCert: {
+        windowInsulation: false, ceilingInsulation: false, wallInsulation: false, floorInsulation: false,
+        regionCode: '', energyGradeBefore: '', energyGradeAfter: '',
+        certAuthority: '', certNumber: '', certDate: '',
+      },
+    },
   },
 };
 
@@ -236,8 +444,11 @@ type CertificateFormData = {
   // 固定資産税用詳細フォーム
   propertyTaxForm: PropertyTaxFormData;
 
-  // ステップ3: 費用計算（reform_tax, property_tax用）
+  // ステップ3: 費用計算（property_tax用）
   workDataForm: WorkDataFormState;
+
+  // reform_tax 用の(3)費用の額等（公式様式準拠）
+  reformTaxCost: ReformTaxCostForm;
 
   // ステップ3: 費用計算（housing_loan, resale用 — 公式様式①②③）
   housingLoanCost: {
@@ -279,6 +490,7 @@ export default function CertificateCreatePage() {
     reformTaxWorkTypes: { ...defaultReformTaxWorkTypeForm },
     propertyTaxForm: { ...defaultPropertyTaxForm },
     workDataForm: {},
+    reformTaxCost: { ...defaultReformTaxCostForm },
     housingLoanCost: { totalCost: 0, hasSubsidy: false, subsidyAmount: 0 },
     workDescriptions: {},
     issuerInfo: null,
@@ -317,12 +529,19 @@ export default function CertificateCreatePage() {
       sessionStorage.setItem('certificate-session-id', currentSessionId);
     }
 
+    const FORM_SCHEMA_VERSION = 3; // v3: work6 B/C/D pattern separation
     const savedData = localStorage.getItem('certificate-form-data');
     let loadedFormData: CertificateFormData | null = null;
 
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
+        // スキーマバージョンが古い場合は旧データを破棄
+        if ((parsed._schemaVersion || 0) < FORM_SCHEMA_VERSION) {
+          console.log('Form schema upgraded: clearing incompatible draft data');
+          localStorage.removeItem('certificate-form-data');
+          // loadedFormData = null のまま → デフォルトで初期化
+        } else {
         if (parsed.sessionId && parsed.sessionId !== currentSessionId) {
           setWasRestored(true);
         }
@@ -331,10 +550,57 @@ export default function CertificateCreatePage() {
         if (!parsed.workDescriptions) parsed.workDescriptions = {};
         if (!parsed.selectedWorkTypes) parsed.selectedWorkTypes = [];
         if (!parsed.housingLoanWorkTypes) parsed.housingLoanWorkTypes = {};
-        if (!parsed.reformTaxWorkTypes) parsed.reformTaxWorkTypes = { ...defaultReformTaxWorkTypeForm };
+        // reformTaxWorkTypes: deep merge with defaults to handle new nested structures
+        {
+          const def = defaultReformTaxWorkTypeForm;
+          const rt = parsed.reformTaxWorkTypes || {};
+          parsed.reformTaxWorkTypes = {
+            seismic: { ...def.seismic, ...rt.seismic },
+            barrierFree: { ...def.barrierFree, ...rt.barrierFree },
+            energySaving: {
+              ...def.energySaving,
+              ...rt.energySaving,
+              lowCarbon: { ...def.energySaving.lowCarbon, ...(rt.energySaving?.lowCarbon || {}) },
+              equipmentTypes: { ...def.energySaving.equipmentTypes, ...(rt.energySaving?.equipmentTypes || {}) },
+              additionalWorks: { ...def.energySaving.additionalWorks, ...(rt.energySaving?.additionalWorks || {}) },
+            },
+            cohabitation: {
+              ...def.cohabitation,
+              ...rt.cohabitation,
+              countBefore: { ...def.cohabitation.countBefore, ...(rt.cohabitation?.countBefore || {}) },
+              countAfter: { ...def.cohabitation.countAfter, ...(rt.cohabitation?.countAfter || {}) },
+            },
+            longTermHousing: { ...def.longTermHousing, ...rt.longTermHousing },
+            childcare: { ...def.childcare, ...rt.childcare },
+            additionalWorks: {
+              work1: { ...def.additionalWorks.work1, ...(rt.additionalWorks?.work1 || {}) },
+              work2: { ...def.additionalWorks.work2, ...(rt.additionalWorks?.work2 || {}) },
+              work3: { ...def.additionalWorks.work3, ...(rt.additionalWorks?.work3 || {}) },
+              work4: { ...def.additionalWorks.work4, ...(rt.additionalWorks?.work4 || {}) },
+              work5: { ...def.additionalWorks.work5, ...(rt.additionalWorks?.work5 || {}) },
+              work6: { ...def.additionalWorks.work6, ...(rt.additionalWorks?.work6 || {}) },
+            },
+          };
+        }
+        // reformTaxCost: deep merge with defaults for new compound structures
+        {
+          const def = defaultReformTaxCostForm;
+          const rc = parsed.reformTaxCost || {};
+          parsed.reformTaxCost = {
+            seismic: { ...def.seismic, ...rc.seismic },
+            barrierFree: { ...def.barrierFree, ...rc.barrierFree },
+            energySaving: { ...def.energySaving, ...rc.energySaving },
+            cohabitation: { ...def.cohabitation, ...rc.cohabitation },
+            longTermOr: { ...def.longTermOr, ...(rc.longTermOr || {}) },
+            longTermAnd: { ...def.longTermAnd, ...(rc.longTermAnd || {}) },
+            childcare: { ...def.childcare, ...rc.childcare },
+            otherRenovation: { ...def.otherRenovation, ...rc.otherRenovation },
+          };
+        }
         if (!parsed.propertyTaxForm) parsed.propertyTaxForm = { ...defaultPropertyTaxForm };
         if (!parsed.housingLoanCost) parsed.housingLoanCost = { totalCost: 0, hasSubsidy: false, subsidyAmount: 0 };
         loadedFormData = parsed;
+        } // end else (schema version OK)
       } catch (error) {
         console.error('Failed to parse saved form data:', error);
       }
@@ -417,6 +683,7 @@ export default function CertificateCreatePage() {
       localStorage.setItem('certificate-form-data', JSON.stringify({
         ...formData,
         sessionId: currentSessionId,
+        _schemaVersion: 3,
       }));
     }
   }, [formData, isInitialized]);
@@ -577,6 +844,119 @@ export default function CertificateCreatePage() {
         };
       }
 
+      // reform_tax 用: reformTaxCost から WorkCostData を計算して works + reformTaxDetail に保存
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let reformTaxDetail: any = undefined;
+      if (formData.purposeType === 'reform_tax') {
+        const rc = formData.reformTaxCost;
+        const wt = formData.reformTaxWorkTypes;
+        const hasSolar = rc.energySaving.hasSolarPower || (wt.energySaving.equipmentTypes.solarPower !== '');
+        const isAnd = wt.longTermHousing.isExcellentHousing;
+
+        const buildCost = (cat: { totalAmount: number; hasSubsidy: boolean; subsidyAmount: number }, limit: number, needOver50: boolean) => {
+          const sub = cat.hasSubsidy ? cat.subsidyAmount : 0;
+          const afterSub = cat.totalAmount - sub;
+          const deductible = needOver50 ? (afterSub > 500_000 ? afterSub : 0) : Math.max(0, afterSub);
+          const maxDed = limit > 0 ? Math.min(deductible, limit) : deductible;
+          const excess = Math.max(0, deductible - maxDed);
+          return {
+            totalAmount: cat.totalAmount,
+            subsidyAmount: sub,
+            deductibleAmount: deductible,
+            maxDeduction: maxDed,
+            excessAmount: excess,
+          };
+        };
+
+        const seismicCost = buildCost(rc.seismic, 2_500_000, false);
+        const bfCost = buildCost(rc.barrierFree, 2_000_000, true);
+        const energyLimit = hasSolar ? 3_500_000 : 2_500_000;
+        const esCost = buildCost(rc.energySaving, energyLimit, true);
+        const cohabCost = buildCost(rc.cohabitation, 2_500_000, true);
+        const ccCost = buildCost(rc.childcare, 2_500_000, true);
+        // ⑳は公式様式では第1号～第6号工事費用（将来実装）
+
+        // ⑤ compound (OR)
+        const lt5 = rc.longTermOr;
+        const lt5BaseSub = lt5.baseHasSubsidy ? lt5.baseSubsidyAmount : 0;
+        const lt5BaseAfter = lt5.baseTotalAmount - lt5BaseSub;
+        const lt5BaseDed = lt5BaseAfter > 500_000 ? lt5BaseAfter : 0;
+        const lt5DurSub = lt5.durabilityHasSubsidy ? lt5.durabilitySubsidyAmount : 0;
+        const lt5DurAfter = lt5.durabilityTotalAmount - lt5DurSub;
+        const lt5DurDed = lt5DurAfter > 500_000 ? lt5DurAfter : 0;
+        const lt5Ki = lt5BaseDed + lt5DurDed;
+        const lt5Limit = hasSolar ? 3_500_000 : 2_500_000;
+        const lt5Ku = Math.min(lt5Ki, lt5Limit);
+        const lt5Ke = Math.max(0, lt5Ki - lt5Ku);
+        const lt5Total = lt5.baseTotalAmount + lt5.durabilityTotalAmount;
+        const lt5SubTotal = lt5BaseSub + lt5DurSub;
+
+        // ⑥ compound (AND)
+        const lt6 = rc.longTermAnd;
+        const lt6SesSub = lt6.seismicHasSubsidy ? lt6.seismicSubsidyAmount : 0;
+        const lt6SesAfter = lt6.seismicTotalAmount - lt6SesSub;
+        const lt6SesDed = lt6SesAfter > 500_000 ? lt6SesAfter : 0;
+        const lt6EnSub = lt6.energyHasSubsidy ? lt6.energySubsidyAmount : 0;
+        const lt6EnAfter = lt6.energyTotalAmount - lt6EnSub;
+        const lt6EnDed = lt6EnAfter > 500_000 ? lt6EnAfter : 0;
+        const lt6DurSub = lt6.durabilityHasSubsidy ? lt6.durabilitySubsidyAmount : 0;
+        const lt6DurAfter = lt6.durabilityTotalAmount - lt6DurSub;
+        const lt6DurDed = lt6DurAfter > 500_000 ? lt6DurAfter : 0;
+        const lt6Ko = lt6SesDed + lt6EnDed + lt6DurDed;
+        const lt6Limit = hasSolar ? 6_000_000 : 5_000_000;
+        const lt6Sa = Math.min(lt6Ko, lt6Limit);
+        const lt6Shi = Math.max(0, lt6Ko - lt6Sa);
+        const lt6Total = lt6.seismicTotalAmount + lt6.energyTotalAmount + lt6.durabilityTotalAmount;
+        const lt6SubTotal = lt6SesSub + lt6EnSub + lt6DurSub;
+
+        // works に WorkSummary として保存（WorkData構造に合わせる）
+        const toSummary = (cost: { totalAmount: number; subsidyAmount: number; deductibleAmount: number }) => ({
+          totalAmount: cost.totalAmount,
+          subsidyAmount: cost.subsidyAmount,
+          deductibleAmount: cost.deductibleAmount,
+        });
+        workData.seismic.summary = rc.seismic.totalAmount > 0 ? toSummary(seismicCost) : null;
+        workData.barrierFree.summary = rc.barrierFree.totalAmount > 0 ? toSummary(bfCost) : null;
+        workData.energySaving.summary = rc.energySaving.totalAmount > 0 ? { ...toSummary(esCost), hasSolarPower: hasSolar } : null;
+        workData.cohabitation.summary = rc.cohabitation.totalAmount > 0 ? toSummary(cohabCost) : null;
+        if (lt5Total > 0) {
+          workData.longTermHousing.summary = { totalAmount: lt5Total, subsidyAmount: lt5SubTotal, deductibleAmount: lt5Ki, isExcellentHousing: false };
+        } else if (lt6Total > 0) {
+          workData.longTermHousing.summary = { totalAmount: lt6Total, subsidyAmount: lt6SubTotal, deductibleAmount: lt6Ko, isExcellentHousing: true };
+        } else {
+          workData.longTermHousing.summary = null;
+        }
+        workData.childcare.summary = rc.childcare.totalAmount > 0 ? toSummary(ccCost) : null;
+
+        // reformTaxDetail 構築（ReformTaxData 相当）
+        reformTaxDetail = {
+          seismic: rc.seismic.totalAmount > 0 ? seismicCost : undefined,
+          barrierFree: rc.barrierFree.totalAmount > 0 ? bfCost : undefined,
+          energySaving: rc.energySaving.totalAmount > 0 ? { ...esCost, hasSolarPower: hasSolar } : undefined,
+          cohabitation: rc.cohabitation.totalAmount > 0 ? cohabCost : undefined,
+          longTermHousingOr: lt5Total > 0 ? {
+            totalAmount: lt5Total, subsidyAmount: lt5SubTotal, deductibleAmount: lt5Ki,
+            maxDeduction: lt5Ku, excessAmount: lt5Ke,
+          } : undefined,
+          longTermHousingAnd: lt6Total > 0 ? {
+            totalAmount: lt6Total, subsidyAmount: lt6SubTotal, deductibleAmount: lt6Ko,
+            maxDeduction: lt6Sa, excessAmount: lt6Shi, isExcellentHousing: true,
+          } : undefined,
+          childcare: rc.childcare.totalAmount > 0 ? ccCost : undefined,
+          workDescription: formData.workDescriptions['_all'] || '',
+        };
+
+        // 合計再計算
+        totalWorkCost = 0;
+        totalSubsidy = 0;
+        for (const data of Object.values(workData)) {
+          if ((data as { summary: { totalAmount: number; subsidyAmount: number } | null }).summary) {
+            totalWorkCost += (data as { summary: { totalAmount: number; subsidyAmount: number } }).summary.totalAmount;
+            totalSubsidy += (data as { summary: { totalAmount: number; subsidyAmount: number } }).summary.subsidyAmount;
+          }
+        }
+      }
+
       // IndexedDBに証明書を新規作成して保存
       const cert = await certificateStore.createCertificate(formData.purposeType as PurposeType, session?.user?.id);
       await certificateStore.updateCertificate(cert.id, {
@@ -595,6 +975,7 @@ export default function CertificateCreatePage() {
         works: workData,
         workDescriptions: formData.workDescriptions,
         housingLoanDetail,
+        reformTaxDetail,
         status,
       });
 
@@ -1228,79 +1609,77 @@ export default function CertificateCreatePage() {
               {/* === reform_tax 専用フォーム（セクションIII 工事の種別） === */}
               {formData.purposeType === 'reform_tax' && (
                 <div className="space-y-5">
-                  {/* ① 耐震改修（selectedWorkTypesに含まれる場合のみ） */}
-                  {effectiveWorkTypes.includes('seismic') && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <h3 className="font-bold text-sm mb-3">① 住宅耐震改修</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {([
-                          ['buildingStandard', '建築基準法施行令第3章及び第5章の4の規定に適合させるもの'],
-                          ['earthquakeSafety', '地震に対する安全性に係る基準に適合させるもの'],
-                        ] as const).map(([key, label]) => (
-                          <label key={key} className="flex items-start space-x-2 text-sm">
-                            <input type="checkbox" className="w-4 h-4 mt-0.5 text-blue-600 rounded"
-                              checked={formData.reformTaxWorkTypes.seismic[key]}
-                              onChange={(e) => setFormData(prev => ({
-                                ...prev,
-                                reformTaxWorkTypes: {
-                                  ...prev.reformTaxWorkTypes,
-                                  seismic: { ...prev.reformTaxWorkTypes.seismic, [key]: e.target.checked },
-                                },
-                              }))} />
-                            <span>{label}</span>
-                          </label>
-                        ))}
-                      </div>
+                  {/* ① 耐震改修 */}
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <h3 className="font-bold text-sm mb-3">① 住宅耐震改修</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {([
+                        ['buildingStandard', '建築基準法施行令第3章及び第5章の4の規定に適合させるもの'],
+                        ['earthquakeSafety', '地震に対する安全性に係る基準に適合させるもの'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-start space-x-2 text-sm">
+                          <input type="checkbox" className="w-4 h-4 mt-0.5 text-blue-600 rounded"
+                            checked={formData.reformTaxWorkTypes.seismic[key]}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                seismic: { ...prev.reformTaxWorkTypes.seismic, [key]: e.target.checked },
+                              },
+                            }))} />
+                          <span>{label}</span>
+                        </label>
+                      ))}
                     </div>
-                  )}
+                  </div>
 
                   {/* ② バリアフリー改修 */}
-                  {effectiveWorkTypes.includes('barrierFree') && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <h3 className="font-bold text-sm mb-3">② 高齢者等居住改修工事等（バリアフリー改修工事）</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {([
-                          ['pathwayExpansion', '1 通路又は出入口の拡幅'],
-                          ['stairSlope', '2 階段の勾配の緩和'],
-                          ['bathroomImprovement', '3 浴室の改良'],
-                          ['toiletImprovement', '4 便所の改良'],
-                          ['handrails', '5 手すりの設置'],
-                          ['stepElimination', '6 床の段差の解消'],
-                          ['doorImprovement', '7 出入口戸の改良'],
-                          ['floorSlipPrevention', '8 床材の滑りの防止'],
-                        ] as const).map(([key, label]) => (
-                          <label key={key} className="flex items-center space-x-2 text-sm">
-                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
-                              checked={formData.reformTaxWorkTypes.barrierFree[key]}
-                              onChange={(e) => setFormData(prev => ({
-                                ...prev,
-                                reformTaxWorkTypes: {
-                                  ...prev.reformTaxWorkTypes,
-                                  barrierFree: { ...prev.reformTaxWorkTypes.barrierFree, [key]: e.target.checked },
-                                },
-                              }))} />
-                            <span>{label}</span>
-                          </label>
-                        ))}
-                      </div>
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <h3 className="font-bold text-sm mb-3">② 高齢者等居住改修工事等（バリアフリー改修工事）</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {([
+                        ['pathwayExpansion', '1 通路又は出入口の拡幅'],
+                        ['stairSlope', '2 階段の勾配の緩和'],
+                        ['bathroomImprovement', '3 浴室の改良'],
+                        ['toiletImprovement', '4 便所の改良'],
+                        ['handrails', '5 手すりの取付'],
+                        ['stepElimination', '6 床の段差の解消'],
+                        ['doorImprovement', '7 出入口戸の改良'],
+                        ['floorSlipPrevention', '8 床材の取替'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-center space-x-2 text-sm">
+                          <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                            checked={formData.reformTaxWorkTypes.barrierFree[key]}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                barrierFree: { ...prev.reformTaxWorkTypes.barrierFree, [key]: e.target.checked },
+                              },
+                            }))} />
+                          <span>{label}</span>
+                        </label>
+                      ))}
                     </div>
-                  )}
+                  </div>
 
                   {/* ③ 省エネ改修 */}
-                  {effectiveWorkTypes.includes('energySaving') && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <h3 className="font-bold text-sm mb-3">③ 一般断熱改修工事等（省エネ改修工事）</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <h3 className="font-bold text-sm mb-3">③ 一般断熱改修工事等（省エネ改修工事）</h3>
+
+                    {/* A. 窓の断熱改修工事パターン */}
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">A. 窓の断熱改修工事</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
                         {([
-                          ['allWindowsInsulation', '1 全ての居室の全ての窓の断熱性を高める工事'],
+                          ['windowInsulation', '1 全ての居室の全ての窓の断熱性を高める工事'],
                           ['ceilingInsulation', '2 天井等の断熱性を高める工事'],
                           ['wallInsulation', '3 壁の断熱性を高める工事'],
                           ['floorInsulation', '4 床等の断熱性を高める工事'],
-                          ['hasSolarPower', '5 太陽光発電設備の設置工事'],
                         ] as const).map(([key, label]) => (
                           <label key={key} className="flex items-center space-x-2 text-sm">
                             <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
-                              checked={formData.reformTaxWorkTypes.energySaving[key]}
+                              checked={(formData.reformTaxWorkTypes.energySaving as Record<string, boolean | string | object>)[key] === true}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 reformTaxWorkTypes: {
@@ -1312,100 +1691,391 @@ export default function CertificateCreatePage() {
                           </label>
                         ))}
                       </div>
+                      <div className="mt-2 ml-2">
+                        <p className="text-xs text-gray-600 mb-1">地域区分</p>
+                        <div className="flex flex-wrap gap-2">
+                          {['1','2','3','4','5','6','7','8'].map(n => (
+                            <label key={n} className="flex items-center space-x-1 text-sm">
+                              <input type="radio" name="energyRegionCode"
+                                checked={formData.reformTaxWorkTypes.energySaving.regionCode === n}
+                                onChange={() => setFormData(prev => ({
+                                  ...prev,
+                                  reformTaxWorkTypes: {
+                                    ...prev.reformTaxWorkTypes,
+                                    energySaving: { ...prev.reformTaxWorkTypes.energySaving, regionCode: n },
+                                  },
+                                }))}
+                                className="w-3 h-3 text-blue-600" />
+                              <span>{n}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  )}
 
-                  {/* ④ 同居対応改修 */}
-                  {effectiveWorkTypes.includes('cohabitation') && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <h3 className="font-bold text-sm mb-3">④ 多世帯同居改修工事等</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* B. 認定低炭素建築物パターン */}
+                    <div className="mb-4 pt-3 border-t border-gray-100">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">B. 認定低炭素建築物の新築等に係る工事</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
                         {([
-                          ['kitchen', '1 キッチンの増設'],
-                          ['bathroom', '2 浴室の増設'],
-                          ['toilet', '3 便所の増設'],
-                          ['entrance', '4 玄関の増設'],
+                          ['windowInsulation', '1 窓の断熱性を高める工事'],
+                          ['ceilingInsulation', '2 天井等の断熱性を高める工事'],
+                          ['wallInsulation', '3 壁の断熱性を高める工事'],
+                          ['floorInsulation', '4 床等の断熱性を高める工事'],
                         ] as const).map(([key, label]) => (
                           <label key={key} className="flex items-center space-x-2 text-sm">
                             <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
-                              checked={formData.reformTaxWorkTypes.cohabitation[key]}
+                              checked={formData.reformTaxWorkTypes.energySaving.lowCarbon[key]}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 reformTaxWorkTypes: {
                                   ...prev.reformTaxWorkTypes,
-                                  cohabitation: { ...prev.reformTaxWorkTypes.cohabitation, [key]: e.target.checked },
+                                  energySaving: {
+                                    ...prev.reformTaxWorkTypes.energySaving,
+                                    lowCarbon: { ...prev.reformTaxWorkTypes.energySaving.lowCarbon, [key]: e.target.checked },
+                                  },
                                 },
                               }))} />
                             <span>{label}</span>
                           </label>
                         ))}
                       </div>
-                    </div>
-                  )}
-
-                  {/* ⑤⑥ 長期優良住宅化改修 */}
-                  {effectiveWorkTypes.includes('longTermHousing') && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <h3 className="font-bold text-sm mb-3">⑤⑥ 耐久性向上改修工事等（長期優良住宅化改修）</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {([
-                          ['structuralDurability', '1 構造躯体等の劣化対策'],
-                          ['earthquakeResistance', '2 耐震性の向上'],
-                          ['energyEfficiency', '3 省エネルギー対策'],
-                          ['maintenanceEase', '4 維持管理・更新の容易性'],
-                        ] as const).map(([key, label]) => (
-                          <label key={key} className="flex items-center space-x-2 text-sm">
-                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
-                              checked={formData.reformTaxWorkTypes.longTermHousing[key]}
-                              onChange={(e) => setFormData(prev => ({
-                                ...prev,
-                                reformTaxWorkTypes: {
-                                  ...prev.reformTaxWorkTypes,
-                                  longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, [key]: e.target.checked },
-                                },
-                              }))} />
-                            <span>{label}</span>
-                          </label>
-                        ))}
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <label className="flex items-center space-x-2 text-sm">
-                          <input type="checkbox" className="w-4 h-4 text-green-600 rounded"
-                            checked={formData.reformTaxWorkTypes.longTermHousing.isExcellentHousing}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2 ml-2">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">認定主体</label>
+                          <input type="text"
+                            value={formData.reformTaxWorkTypes.energySaving.lowCarbon.certAuthority}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
                               reformTaxWorkTypes: {
                                 ...prev.reformTaxWorkTypes,
-                                longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, isExcellentHousing: e.target.checked },
+                                energySaving: {
+                                  ...prev.reformTaxWorkTypes.energySaving,
+                                  lowCarbon: { ...prev.reformTaxWorkTypes.energySaving.lowCarbon, certAuthority: e.target.value },
+                                },
                               },
-                            }))} />
-                          <span className="font-medium text-green-800">認定長期優良住宅に該当する（⑥耐震及び省エネの両方と併せて行う場合）</span>
-                        </label>
+                            }))}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="○○市長" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">認定番号</label>
+                          <input type="text"
+                            value={formData.reformTaxWorkTypes.energySaving.lowCarbon.certNumber}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                energySaving: {
+                                  ...prev.reformTaxWorkTypes.energySaving,
+                                  lowCarbon: { ...prev.reformTaxWorkTypes.energySaving.lowCarbon, certNumber: e.target.value },
+                                },
+                              },
+                            }))}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="第○○号" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">認定年月日</label>
+                          <input type="date"
+                            value={formData.reformTaxWorkTypes.energySaving.lowCarbon.certDate}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                energySaving: {
+                                  ...prev.reformTaxWorkTypes.energySaving,
+                                  lowCarbon: { ...prev.reformTaxWorkTypes.energySaving.lowCarbon, certDate: e.target.value },
+                                },
+                              },
+                            }))}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* ⑦ 子育て対応改修 */}
-                  {effectiveWorkTypes.includes('childcare') && (
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <h3 className="font-bold text-sm mb-3">⑦ 子育て対応改修工事等</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* C. 設備型式 */}
+                    <div className="mb-4 pt-3 border-t border-gray-100">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">C. 設備の型式</p>
+                      <div className="space-y-2 ml-2">
                         {([
-                          ['fenceInstallation', '1 転落防止柵の設置'],
-                          ['doorSafety', '2 開戸の安全装置の設置'],
-                          ['fingerProtection', '3 引戸への指挟み防止措置'],
-                          ['cornerProtection', '4 角部の面取り'],
-                          ['fixedFurniture', '5 家具固定金具の設置'],
-                          ['floorSoftening', '6 床の衝撃緩和'],
+                          ['solarHeat', '太陽熱利用冷温熱装置'],
+                          ['latentHeatRecovery', '潜熱回収型給湯器'],
+                          ['heatPump', 'ヒートポンプ式電気給湯器'],
+                          ['fuelCell', '燃料電池コージェネレーション'],
+                          ['gasEngine', 'ガスエンジン給湯器'],
+                          ['airConditioner', 'エアコンディショナー'],
+                          ['solarPower', '太陽光発電設備'],
                         ] as const).map(([key, label]) => (
-                          <label key={key} className="flex items-center space-x-2 text-sm">
-                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
-                              checked={formData.reformTaxWorkTypes.childcare[key]}
+                          <div key={key} className="flex items-center gap-2">
+                            <label className="text-xs text-gray-600 w-48 shrink-0">{label}</label>
+                            <input type="text"
+                              value={formData.reformTaxWorkTypes.energySaving.equipmentTypes[key]}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 reformTaxWorkTypes: {
                                   ...prev.reformTaxWorkTypes,
-                                  childcare: { ...prev.reformTaxWorkTypes.childcare, [key]: e.target.checked },
+                                  energySaving: {
+                                    ...prev.reformTaxWorkTypes.energySaving,
+                                    equipmentTypes: { ...prev.reformTaxWorkTypes.energySaving.equipmentTypes, [key]: e.target.value },
+                                  },
+                                },
+                              }))}
+                              className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="型式を入力" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* D. 追加工事 */}
+                    <div className="pt-3 border-t border-gray-100">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">D. 追加工事の有無</p>
+                      <div className="space-y-2 ml-2">
+                        {([
+                          ['safetyWork', '安全対策工事'],
+                          ['roofWaterproofing', '陸屋根防水基礎工事'],
+                          ['snowProtection', '積雪対策工事'],
+                          ['saltProtection', '塩害対策工事'],
+                          ['trunkLineReinforcement', '幹線増強工事'],
+                        ] as const).map(([key, label]) => (
+                          <div key={key} className="flex items-center gap-3">
+                            <span className="text-xs text-gray-600 w-36 shrink-0">{label}</span>
+                            {['yes', 'no'].map(val => (
+                              <label key={val} className="flex items-center gap-1 text-xs">
+                                <input type="radio"
+                                  name={`additionalWork_${key}`}
+                                  checked={formData.reformTaxWorkTypes.energySaving.additionalWorks[key] === val}
+                                  onChange={() => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      energySaving: {
+                                        ...prev.reformTaxWorkTypes.energySaving,
+                                        additionalWorks: { ...prev.reformTaxWorkTypes.energySaving.additionalWorks, [key]: val },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-3 h-3" />
+                                {val === 'yes' ? '有' : '無'}
+                              </label>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ④ 同居対応改修 */}
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <h3 className="font-bold text-sm mb-3">④ 多世帯同居改修工事等</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                      {([
+                        ['kitchen', '1 調理室の増設'],
+                        ['bathroom', '2 浴室の増設'],
+                        ['toilet', '3 便所の増設'],
+                        ['entrance', '4 玄関の増設'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-center space-x-2 text-sm">
+                          <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                            checked={formData.reformTaxWorkTypes.cohabitation[key] as boolean}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                cohabitation: { ...prev.reformTaxWorkTypes.cohabitation, [key]: e.target.checked },
+                              },
+                            }))} />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {/* 改修前後の室数 */}
+                    <div className="border-t border-gray-100 pt-3">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">改修工事前後の室数</p>
+                      <div className="overflow-x-auto">
+                        <table className="text-xs w-full">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="px-2 py-1 text-left"></th>
+                              <th className="px-2 py-1 text-center">調理室</th>
+                              <th className="px-2 py-1 text-center">浴室</th>
+                              <th className="px-2 py-1 text-center">便所</th>
+                              <th className="px-2 py-1 text-center">玄関</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(['countBefore', 'countAfter'] as const).map(timing => (
+                              <tr key={timing}>
+                                <td className="px-2 py-1 font-medium">{timing === 'countBefore' ? '改修前' : '改修後'}</td>
+                                {(['kitchen', 'bathroom', 'toilet', 'entrance'] as const).map(room => (
+                                  <td key={room} className="px-2 py-1 text-center">
+                                    <input type="number" min={0}
+                                      value={formData.reformTaxWorkTypes.cohabitation[timing][room] || ''}
+                                      onChange={(e) => setFormData(prev => ({
+                                        ...prev,
+                                        reformTaxWorkTypes: {
+                                          ...prev.reformTaxWorkTypes,
+                                          cohabitation: {
+                                            ...prev.reformTaxWorkTypes.cohabitation,
+                                            [timing]: { ...prev.reformTaxWorkTypes.cohabitation[timing], [room]: parseInt(e.target.value) || 0 },
+                                          },
+                                        },
+                                      }))}
+                                      className="w-16 px-1 py-1 text-center text-sm border border-gray-300 rounded-md" />
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ⑤ 耐久性向上改修工事等 */}
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <h3 className="font-bold text-sm mb-3">⑤ 耐久性向上改修工事等</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {([
+                        ['atticVentilation', '1 小屋裏の換気工事'],
+                        ['atticInspection', '2 小屋裏点検口の取付工事'],
+                        ['wallVentilation', '3 外壁の通気構造等工事'],
+                        ['bathroomWaterproof', '4 浴室又は脱衣室の防水工事'],
+                        ['foundationAntiDecay', '5 土台の防腐・防蟻工事'],
+                        ['wallFrameAntiDecay', '6 外壁の軸組等の防腐・防蟻工事'],
+                        ['underfloorMoisture', '7 床下の防湿工事'],
+                        ['underfloorInspection', '8 床下点検口の取付工事'],
+                        ['gutterInstallation', '9 雨どいの取付工事'],
+                        ['groundAntiTermite', '10 地盤の防蟻工事'],
+                        ['pipingMaintenance', '11 給水管・給湯管又は排水管の維持管理又は更新の容易化工事'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-start space-x-2 text-sm">
+                          <input type="checkbox" className="w-4 h-4 mt-0.5 text-blue-600 rounded"
+                            checked={(formData.reformTaxWorkTypes.longTermHousing as Record<string, boolean | string>)[key] === true}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, [key]: e.target.checked },
+                              },
+                            }))} />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {/* 認定情報 */}
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">長期優良住宅建築等計画の認定情報</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">認定主体</label>
+                          <input type="text"
+                            value={formData.reformTaxWorkTypes.longTermHousing.certAuthority}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, certAuthority: e.target.value },
+                              },
+                            }))}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="○○市長" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">認定番号</label>
+                          <input type="text"
+                            value={formData.reformTaxWorkTypes.longTermHousing.certNumber}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, certNumber: e.target.value },
+                              },
+                            }))}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="第○○号" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">認定年月日</label>
+                          <input type="date"
+                            value={formData.reformTaxWorkTypes.longTermHousing.certDate}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, certDate: e.target.value },
+                              },
+                            }))}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <label className="flex items-center space-x-2 text-sm">
+                        <input type="checkbox" className="w-4 h-4 text-green-600 rounded"
+                          checked={formData.reformTaxWorkTypes.longTermHousing.isExcellentHousing}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            reformTaxWorkTypes: {
+                              ...prev.reformTaxWorkTypes,
+                              longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, isExcellentHousing: e.target.checked },
+                            },
+                          }))} />
+                        <span className="font-medium text-green-800">認定長期優良住宅に該当する（⑥耐震及び省エネの両方と併せて行う場合）</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* ⑦ 子育て対応改修 */}
+                  <div className="p-4 border border-gray-200 rounded-lg">
+                    <h3 className="font-bold text-sm mb-3">⑥ 子育て対応改修工事等</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {([
+                        ['accidentPrevention', '1 子どもの事故を防止するための工事'],
+                        ['counterKitchen', '2 対面式キッチンへの交換工事'],
+                        ['securityImprovement', '3 開口部の防犯性を高める工事'],
+                        ['storageIncrease', '4 収納設備を増設する工事'],
+                        ['soundproofing', '5 開口部・界壁・界床の防音性を高める工事'],
+                        ['layoutChange', '6 間取り変更工事'],
+                      ] as const).map(([key, label]) => (
+                        <label key={key} className="flex items-center space-x-2 text-sm">
+                          <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                            checked={formData.reformTaxWorkTypes.childcare[key]}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                childcare: { ...prev.reformTaxWorkTypes.childcare, [key]: e.target.checked },
+                              },
+                            }))} />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 併せて行う第1号〜第6号工事 */}
+                  <div className="p-4 border border-orange-200 bg-orange-50 rounded-lg">
+                    <h3 className="font-bold text-sm mb-1">併せて行う第1号〜第6号工事</h3>
+                    <p className="text-xs text-gray-500 mb-4">①〜⑦の工事と併せて行った場合に記入してください。</p>
+
+                    {/* 第1号工事 */}
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">第1号工事</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-2">
+                        {([
+                          ['extension', '1 増築'],
+                          ['renovation', '2 改築'],
+                          ['majorRepair', '3 大規模の修繕'],
+                          ['majorRemodeling', '4 大規模の模様替'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                              checked={formData.reformTaxWorkTypes.additionalWorks.work1[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  additionalWorks: {
+                                    ...prev.reformTaxWorkTypes.additionalWorks,
+                                    work1: { ...prev.reformTaxWorkTypes.additionalWorks.work1, [key]: e.target.checked },
+                                  },
                                 },
                               }))} />
                             <span>{label}</span>
@@ -1413,7 +2083,527 @@ export default function CertificateCreatePage() {
                         ))}
                       </div>
                     </div>
-                  )}
+
+                    {/* 第2号工事 */}
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">第2号工事</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                        {([
+                          ['floor', '1 床の過半の修繕又は模様替'],
+                          ['stairs', '2 階段の過半の修繕又は模様替'],
+                          ['partition', '3 間仕切壁の過半の修繕又は模様替'],
+                          ['wall', '4 壁の過半の修繕又は模様替'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                              checked={formData.reformTaxWorkTypes.additionalWorks.work2[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  additionalWorks: {
+                                    ...prev.reformTaxWorkTypes.additionalWorks,
+                                    work2: { ...prev.reformTaxWorkTypes.additionalWorks.work2, [key]: e.target.checked },
+                                  },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 第3号工事 */}
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">第3号工事</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-2">
+                        {([
+                          ['livingRoom', '1 居室'],
+                          ['kitchen', '2 調理室'],
+                          ['bathroom', '3 浴室'],
+                          ['toilet', '4 便所'],
+                          ['washroom', '5 洗面所'],
+                          ['storage', '6 納戸'],
+                          ['entrance', '7 玄関'],
+                          ['corridor', '8 廊下'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                              checked={formData.reformTaxWorkTypes.additionalWorks.work3[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  additionalWorks: {
+                                    ...prev.reformTaxWorkTypes.additionalWorks,
+                                    work3: { ...prev.reformTaxWorkTypes.additionalWorks.work3, [key]: e.target.checked },
+                                  },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 第4号工事 */}
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-gray-700 mb-1">第4号工事（耐震改修工事）</p>
+                      <p className="text-xs text-red-500 mb-2">※①の工事を実施していない場合のみ選択</p>
+                      <div className="grid grid-cols-1 gap-2 ml-2">
+                        {([
+                          ['buildingStandard', '1 建築基準法施行令第3章及び第5章の4の規定'],
+                          ['earthquakeSafety', '2 地震に対する安全性に係る基準'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                              checked={formData.reformTaxWorkTypes.additionalWorks.work4[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  additionalWorks: {
+                                    ...prev.reformTaxWorkTypes.additionalWorks,
+                                    work4: { ...prev.reformTaxWorkTypes.additionalWorks.work4, [key]: e.target.checked },
+                                  },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 第5号工事 */}
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-gray-700 mb-1">第5号工事（バリアフリー改修工事）</p>
+                      <p className="text-xs text-red-500 mb-2">※②の工事を実施していない場合のみ選択</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                        {([
+                          ['pathwayExpansion', '1 通路又は出入口の拡幅'],
+                          ['stairSlope', '2 階段の勾配の緩和'],
+                          ['bathroomImprovement', '3 浴室の改良'],
+                          ['toiletImprovement', '4 便所の改良'],
+                          ['handrails', '5 手すりの取付'],
+                          ['stepElimination', '6 床の段差の解消'],
+                          ['doorImprovement', '7 出入口の戸の改良'],
+                          ['floorReplacement', '8 床材の取替'],
+                        ] as const).map(([key, label]) => (
+                          <label key={key} className="flex items-center space-x-2 text-sm">
+                            <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                              checked={formData.reformTaxWorkTypes.additionalWorks.work5[key]}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                reformTaxWorkTypes: {
+                                  ...prev.reformTaxWorkTypes,
+                                  additionalWorks: {
+                                    ...prev.reformTaxWorkTypes.additionalWorks,
+                                    work5: { ...prev.reformTaxWorkTypes.additionalWorks.work5, [key]: e.target.checked },
+                                  },
+                                },
+                              }))} />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 第6号工事 */}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700 mb-1">第6号工事（省エネ改修工事）</p>
+                      <p className="text-xs text-red-500 mb-2">※③の工事を実施していない場合のみ選択</p>
+                      <div className="ml-2 space-y-3">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">A. 窓の断熱改修</p>
+                          <div className="flex flex-wrap gap-3">
+                            {[['1', '1 断熱性を高める'], ['2', '2 断熱性を相当程度高める'], ['3', '3 断熱性を著しく高める']].map(([val, label]) => (
+                              <label key={val} className="flex items-center space-x-1 text-sm">
+                                <input type="radio" name="addWork6WindowType"
+                                  checked={formData.reformTaxWorkTypes.additionalWorks.work6.windowInsulationType === val}
+                                  onChange={() => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, windowInsulationType: val },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-3 h-3" />
+                                <span>{label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                            {([
+                              ['ceilingInsulation', '4 天井等の断熱性を高める工事'],
+                              ['wallInsulation', '5 壁の断熱性を高める工事'],
+                              ['floorInsulation', '6 床等の断熱性を高める工事'],
+                            ] as const).map(([key, label]) => (
+                              <label key={key} className="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                  checked={formData.reformTaxWorkTypes.additionalWorks.work6[key] as boolean}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, [key]: e.target.checked },
+                                      },
+                                    },
+                                  }))} />
+                                <span>{label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-3">
+                            <span className="text-xs text-gray-600">地域区分:</span>
+                            {['1','2','3','4','5','6','7','8'].map(n => (
+                              <label key={n} className="flex items-center space-x-1 text-xs">
+                                <input type="radio" name="addWork6Region"
+                                  checked={formData.reformTaxWorkTypes.additionalWorks.work6.regionCode === n}
+                                  onChange={() => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, regionCode: n },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-3 h-3" />
+                                <span>{n}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="mt-2">
+                            <span className="text-xs text-gray-600">改修工事前の断熱等性能等級:</span>
+                            <div className="flex gap-3 mt-1">
+                              {['1','2','3'].map(g => (
+                                <label key={g} className="flex items-center space-x-1 text-xs">
+                                  <input type="radio" name="addWork6GradeBefore"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.energyGradeBefore === g}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxWorkTypes: {
+                                        ...prev.reformTaxWorkTypes,
+                                        additionalWorks: {
+                                          ...prev.reformTaxWorkTypes.additionalWorks,
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, energyGradeBefore: g },
+                                        },
+                                      },
+                                    }))}
+                                    className="w-3 h-3" />
+                                  <span>等級{g}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* B. 認定低炭素建築物 */}
+                        <div className="border-t border-gray-200 pt-2">
+                          <p className="text-xs text-gray-500 mb-1">B. 認定低炭素建築物新築等計画に基づく工事の場合</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                            {([
+                              ['windowInsulation', '1 窓'],
+                              ['ceilingInsulation', '2 天井等'],
+                              ['wallInsulation', '3 壁'],
+                              ['floorInsulation', '4 床等'],
+                            ] as const).map(([key, label]) => (
+                              <label key={key} className="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                  checked={formData.reformTaxWorkTypes.additionalWorks.work6.lowCarbon[key]}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, lowCarbon: { ...prev.reformTaxWorkTypes.additionalWorks.work6.lowCarbon, [key]: e.target.checked } },
+                                      },
+                                    },
+                                  }))} />
+                                <span>{label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2 ml-2">
+                            {([
+                              ['certAuthority', '認定主体'],
+                              ['certNumber', '認定番号'],
+                              ['certDate', '認定年月日'],
+                            ] as const).map(([key, label]) => (
+                              <div key={key}>
+                                <label className="block text-xs text-gray-600 mb-1">{label}</label>
+                                <input type={key === 'certDate' ? 'date' : 'text'}
+                                  value={formData.reformTaxWorkTypes.additionalWorks.work6.lowCarbon[key]}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, lowCarbon: { ...prev.reformTaxWorkTypes.additionalWorks.work6.lowCarbon, [key]: e.target.value } },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* C. 住宅性能評価書 */}
+                        <div className="border-t border-gray-200 pt-2">
+                          <p className="text-xs text-gray-500 mb-1">C. 住宅性能評価書により証明される場合</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                            {([
+                              ['windowInsulation', '1 窓の断熱性を高める工事'],
+                              ['ceilingInsulation', '2 天井等の断熱性を高める工事'],
+                              ['wallInsulation', '3 壁の断熱性を高める工事'],
+                              ['floorInsulation', '4 床等の断熱性を高める工事'],
+                            ] as const).map(([key, label]) => (
+                              <label key={key} className="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                  checked={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval[key]}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, [key]: e.target.checked } },
+                                      },
+                                    },
+                                  }))} />
+                                <span>{label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="mt-2 ml-2">
+                            <span className="text-xs text-gray-600">地域区分:</span>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {['1','2','3','4','5','6','7','8'].map(n => (
+                                <label key={n} className="flex items-center space-x-1 text-xs">
+                                  <input type="radio" name="addWork6PerfRegion"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.regionCode === n}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxWorkTypes: {
+                                        ...prev.reformTaxWorkTypes,
+                                        additionalWorks: {
+                                          ...prev.reformTaxWorkTypes.additionalWorks,
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, regionCode: n } },
+                                        },
+                                      },
+                                    }))}
+                                    className="w-3 h-3" />
+                                  <span>{n}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-2 ml-2">
+                            <span className="text-xs text-gray-600">改修工事前の断熱等性能等級:</span>
+                            <div className="flex gap-3 mt-1">
+                              {['1','2','3'].map(g => (
+                                <label key={g} className="flex items-center space-x-1 text-xs">
+                                  <input type="radio" name="addWork6PerfGradeBefore"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.energyGradeBefore === g}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxWorkTypes: {
+                                        ...prev.reformTaxWorkTypes,
+                                        additionalWorks: {
+                                          ...prev.reformTaxWorkTypes.additionalWorks,
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, energyGradeBefore: g } },
+                                        },
+                                      },
+                                    }))}
+                                    className="w-3 h-3" />
+                                  <span>等級{g}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-2 ml-2">
+                            <span className="text-xs text-gray-600">改修工事後の断熱等性能等級:</span>
+                            <div className="flex gap-3 mt-1">
+                              {[['1', '断熱等性能等級２'], ['2', '断熱等性能等級３'], ['3', '断熱等性能等級４以上']].map(([val, label]) => (
+                                <label key={val} className="flex items-center space-x-1 text-xs">
+                                  <input type="radio" name="addWork6PerfGradeAfter"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.energyGradeAfter === val}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxWorkTypes: {
+                                        ...prev.reformTaxWorkTypes,
+                                        additionalWorks: {
+                                          ...prev.reformTaxWorkTypes.additionalWorks,
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, energyGradeAfter: val } },
+                                        },
+                                      },
+                                    }))}
+                                    className="w-3 h-3" />
+                                  <span>{label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 ml-2">
+                            {([
+                              ['evalAgencyName', '登録住宅性能評価機関の名称'],
+                              ['evalRegistrationNumber', '登録番号'],
+                              ['evalCertNumber', '住宅性能評価書の交付番号'],
+                              ['evalCertDate', '住宅性能評価書の交付年月日'],
+                            ] as const).map(([key, label]) => (
+                              <div key={key}>
+                                <label className="block text-xs text-gray-600 mb-1">{label}</label>
+                                <input type={key === 'evalCertDate' ? 'date' : 'text'}
+                                  value={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval[key]}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, [key]: e.target.value } },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* D. 長期優良住宅認定 */}
+                        <div className="border-t border-gray-200 pt-2">
+                          <p className="text-xs text-gray-500 mb-1">D. 増改築による長期優良住宅建築等計画の認定により証明される場合</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                            {([
+                              ['windowInsulation', '1 窓の断熱性を高める工事'],
+                              ['ceilingInsulation', '2 天井等の断熱性を高める工事'],
+                              ['wallInsulation', '3 壁の断熱性を高める工事'],
+                              ['floorInsulation', '4 床等の断熱性を高める工事'],
+                            ] as const).map(([key, label]) => (
+                              <label key={key} className="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                  checked={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert[key]}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, [key]: e.target.checked } },
+                                      },
+                                    },
+                                  }))} />
+                                <span>{label}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="mt-2 ml-2">
+                            <span className="text-xs text-gray-600">地域区分:</span>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {['1','2','3','4','5','6','7','8'].map(n => (
+                                <label key={n} className="flex items-center space-x-1 text-xs">
+                                  <input type="radio" name="addWork6LtRegion"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert.regionCode === n}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxWorkTypes: {
+                                        ...prev.reformTaxWorkTypes,
+                                        additionalWorks: {
+                                          ...prev.reformTaxWorkTypes.additionalWorks,
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, regionCode: n } },
+                                        },
+                                      },
+                                    }))}
+                                    className="w-3 h-3" />
+                                  <span>{n}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-2 ml-2">
+                            <span className="text-xs text-gray-600">改修工事前の断熱等性能等級:</span>
+                            <div className="flex gap-3 mt-1">
+                              {['1','2','3'].map(g => (
+                                <label key={g} className="flex items-center space-x-1 text-xs">
+                                  <input type="radio" name="addWork6LtGradeBefore"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert.energyGradeBefore === g}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxWorkTypes: {
+                                        ...prev.reformTaxWorkTypes,
+                                        additionalWorks: {
+                                          ...prev.reformTaxWorkTypes.additionalWorks,
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, energyGradeBefore: g } },
+                                        },
+                                      },
+                                    }))}
+                                    className="w-3 h-3" />
+                                  <span>等級{g}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-2 ml-2">
+                            <span className="text-xs text-gray-600">改修工事後の断熱等性能等級:</span>
+                            <div className="flex gap-3 mt-1">
+                              {[['1', '断熱等性能等級３'], ['2', '断熱等性能等級４以上']].map(([val, label]) => (
+                                <label key={val} className="flex items-center space-x-1 text-xs">
+                                  <input type="radio" name="addWork6LtGradeAfter"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert.energyGradeAfter === val}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxWorkTypes: {
+                                        ...prev.reformTaxWorkTypes,
+                                        additionalWorks: {
+                                          ...prev.reformTaxWorkTypes.additionalWorks,
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, energyGradeAfter: val } },
+                                        },
+                                      },
+                                    }))}
+                                    className="w-3 h-3" />
+                                  <span>{label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2 ml-2">
+                            {([
+                              ['certAuthority', '認定主体'],
+                              ['certNumber', '認定番号'],
+                              ['certDate', '認定年月日'],
+                            ] as const).map(([key, label]) => (
+                              <div key={key}>
+                                <label className="block text-xs text-gray-600 mb-1">{label}</label>
+                                <input type={key === 'certDate' ? 'date' : 'text'}
+                                  value={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert[key]}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, [key]: e.target.value } },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                 </div>
               )}
@@ -1860,6 +3050,451 @@ export default function CertificateCreatePage() {
                     })()}
                   </div>
                 </div>
+              ) : formData.purposeType === 'reform_tax' ? (
+                /* reform_tax: 公式様式準拠の費用フォーム */
+                (() => {
+                  const rc = formData.reformTaxCost;
+                  const wt = formData.reformTaxWorkTypes;
+                  const hasSolar = rc.energySaving.hasSolarPower || (wt.energySaving.equipmentTypes.solarPower !== '');
+
+                  // 各カテゴリのウ・エ・オ自動計算
+                  const calc = (cat: ReformTaxCostCategory, limit: number, needOver50: boolean) => {
+                    const sub = cat.hasSubsidy ? cat.subsidyAmount : 0;
+                    const afterSub = cat.totalAmount - sub;
+                    const deductible = needOver50 ? (afterSub > 500_000 ? afterSub : 0) : Math.max(0, afterSub);
+                    const maxDed = limit > 0 ? Math.min(deductible, limit) : deductible;
+                    const excess = Math.max(0, deductible - maxDed);
+                    return { afterSub, deductible, maxDed, excess };
+                  };
+
+                  const seismicCalc = calc(rc.seismic, 2_500_000, false);
+                  const bfCalc = calc(rc.barrierFree, 2_000_000, true);
+                  const energyLimit = hasSolar ? 3_500_000 : 2_500_000;
+                  const esCalc = calc(rc.energySaving, energyLimit, true);
+                  const cohabCalc = calc(rc.cohabitation, 2_500_000, true);
+                  const ccCalc = calc(rc.childcare, 2_500_000, true);
+                  // ⑳は公式様式では第1号～第6号工事費用（将来実装）
+
+                  // ⑤ compound calc (OR: 耐震又は省エネ)
+                  const lt5 = rc.longTermOr;
+                  const lt5BaseSub = lt5.baseHasSubsidy ? lt5.baseSubsidyAmount : 0;
+                  const lt5BaseAfter = lt5.baseTotalAmount - lt5BaseSub;
+                  const lt5BaseDed = lt5BaseAfter > 500_000 ? lt5BaseAfter : 0;
+                  const lt5DurSub = lt5.durabilityHasSubsidy ? lt5.durabilitySubsidyAmount : 0;
+                  const lt5DurAfter = lt5.durabilityTotalAmount - lt5DurSub;
+                  const lt5DurDed = lt5DurAfter > 500_000 ? lt5DurAfter : 0;
+                  const lt5Ki = lt5BaseDed + lt5DurDed;
+                  const lt5Limit = hasSolar ? 3_500_000 : 2_500_000;
+                  const lt5Ku = Math.min(lt5Ki, lt5Limit);
+                  const lt5Ke = Math.max(0, lt5Ki - lt5Ku);
+
+                  // ⑥ compound calc (AND: 耐震及び省エネ)
+                  const lt6 = rc.longTermAnd;
+                  const lt6SesSub = lt6.seismicHasSubsidy ? lt6.seismicSubsidyAmount : 0;
+                  const lt6SesAfter = lt6.seismicTotalAmount - lt6SesSub;
+                  const lt6SesDed = lt6SesAfter > 500_000 ? lt6SesAfter : 0;
+                  const lt6EnSub = lt6.energyHasSubsidy ? lt6.energySubsidyAmount : 0;
+                  const lt6EnAfter = lt6.energyTotalAmount - lt6EnSub;
+                  const lt6EnDed = lt6EnAfter > 500_000 ? lt6EnAfter : 0;
+                  const lt6DurSub = lt6.durabilityHasSubsidy ? lt6.durabilitySubsidyAmount : 0;
+                  const lt6DurAfter = lt6.durabilityTotalAmount - lt6DurSub;
+                  const lt6DurDed = lt6DurAfter > 500_000 ? lt6DurAfter : 0;
+                  const lt6Ko = lt6SesDed + lt6EnDed + lt6DurDed;
+                  const lt6Limit = hasSolar ? 6_000_000 : 5_000_000;
+                  const lt6Sa = Math.min(lt6Ko, lt6Limit);
+                  const lt6Shi = Math.max(0, lt6Ko - lt6Sa);
+
+                  // ⑧⑨⑩ パターン1: ①+②+③+④+⑦
+                  const p1Ded = seismicCalc.deductible + bfCalc.deductible + esCalc.deductible + cohabCalc.deductible + ccCalc.deductible;
+                  const p1Max = seismicCalc.maxDed + bfCalc.maxDed + esCalc.maxDed + cohabCalc.maxDed + ccCalc.maxDed;
+                  const p1Exc = seismicCalc.excess + bfCalc.excess + esCalc.excess + cohabCalc.excess + ccCalc.excess;
+                  // ⑪⑫⑬ パターン2: ②+④+⑤キ/ク/ケ+⑦ (OR)
+                  const p2Ded = bfCalc.deductible + cohabCalc.deductible + lt5Ki + ccCalc.deductible;
+                  const p2Max = bfCalc.maxDed + cohabCalc.maxDed + lt5Ku + ccCalc.maxDed;
+                  const p2Exc = bfCalc.excess + cohabCalc.excess + lt5Ke + ccCalc.excess;
+                  // ⑭⑮⑯ パターン3: ②+④+⑥コ/サ/シ+⑦ (AND)
+                  const p3Ded = bfCalc.deductible + cohabCalc.deductible + lt6Ko + ccCalc.deductible;
+                  const p3Max = bfCalc.maxDed + cohabCalc.maxDed + lt6Sa + ccCalc.maxDed;
+                  const p3Exc = bfCalc.excess + cohabCalc.excess + lt6Shi + ccCalc.excess;
+
+                  // ⑰⑱⑲ 最大値選択
+                  const r17 = Math.min(Math.max(p1Max, p2Max, p3Max), 10_000_000);
+                  const r18 = Math.max(p1Ded, p2Ded, p3Ded);
+                  let r19: number;
+                  if (r18 === p3Ded && p3Ded > 0) r19 = p3Exc;
+                  else if (r18 === p2Ded && p2Ded > 0) r19 = p2Exc;
+                  else r19 = p1Exc;
+
+                  // ㉑㉒㉓ 最終計算 — ㉑ = MIN(⑱, ⑲)
+                  const r21 = r18 <= 0 ? 0 : Math.min(r18, r19);
+                  const r22 = Math.max(0, 10_000_000 - r17);
+                  const r23 = Math.min(r21, r22);
+
+                  // カテゴリ入力フォームの共通レンダラー
+                  // カテゴリ → 計算ページの対応
+                  const calcPageMap: Record<string, string> = {
+                    seismic: '/seismic-reform',
+                    barrierFree: '/barrier-free-reform',
+                    energySaving: '/energy-saving-reform',
+                    cohabitation: '/cohabitation-reform',
+                    childcare: '/childcare-reform',
+                  };
+
+                  const renderCategory = (
+                    key: 'seismic' | 'barrierFree' | 'energySaving' | 'cohabitation' | 'childcare',
+                    label: string,
+                    calcResult: { afterSub: number; deductible: number; maxDed: number; excess: number },
+                    limitLabel: string,
+                    needOver50: boolean,
+                  ) => {
+                    const cat = rc[key] as ReformTaxCostCategory;
+                    return (
+                      <div key={key} className="p-4 border border-gray-200 rounded-lg">
+                        <h4 className="font-bold text-sm mb-3">{label}</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-xs font-medium text-gray-700">ア　標準的な費用の額</label>
+                              {calcPageMap[key] && (
+                                <a href={calcPageMap[key]} target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline">計算ページへ →</a>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 max-w-sm">
+                              <input type="number" min={0}
+                                value={cat.totalAmount || ''}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  reformTaxCost: {
+                                    ...prev.reformTaxCost,
+                                    [key]: { ...prev.reformTaxCost[key], totalAmount: parseInt(e.target.value) || 0 },
+                                  },
+                                }))}
+                                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="0" />
+                              <span className="text-sm text-gray-600">円</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">イ　補助金等の交付の有無</label>
+                            <div className="flex items-center gap-4 mb-2">
+                              <label className="flex items-center gap-1 text-sm">
+                                <input type="radio" checked={cat.hasSubsidy}
+                                  onChange={() => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxCost: { ...prev.reformTaxCost, [key]: { ...prev.reformTaxCost[key], hasSubsidy: true } },
+                                  }))}
+                                  className="w-4 h-4" />
+                                有
+                              </label>
+                              <label className="flex items-center gap-1 text-sm">
+                                <input type="radio" checked={!cat.hasSubsidy}
+                                  onChange={() => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxCost: { ...prev.reformTaxCost, [key]: { ...prev.reformTaxCost[key], hasSubsidy: false, subsidyAmount: 0 } },
+                                  }))}
+                                  className="w-4 h-4" />
+                                無
+                              </label>
+                            </div>
+                            {cat.hasSubsidy && (
+                              <div className="pl-4 border-l-2 border-gray-300">
+                                <label className="block text-xs text-gray-600 mb-1">補助金等の額</label>
+                                <div className="flex items-center gap-2 max-w-sm">
+                                  <input type="number" min={0}
+                                    value={cat.subsidyAmount || ''}
+                                    onChange={(e) => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxCost: { ...prev.reformTaxCost, [key]: { ...prev.reformTaxCost[key], subsidyAmount: parseInt(e.target.value) || 0 } },
+                                    }))}
+                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="0" />
+                                  <span className="text-sm text-gray-600">円</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="bg-gray-50 rounded-md p-3 space-y-1 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">ウ　アからイを差し引いた額{needOver50 ? '（50万円を超える場合）' : ''}</span>
+                              <span className={`font-medium ${needOver50 && calcResult.afterSub > 0 && calcResult.deductible === 0 ? 'text-amber-600' : ''}`}>
+                                {calcResult.deductible.toLocaleString()}円
+                                {needOver50 && calcResult.afterSub > 0 && calcResult.deductible === 0 && ' (50万円以下)'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">エ　ウと{limitLabel}のうちいずれか少ない金額</span>
+                              <span className="font-medium">{calcResult.maxDed.toLocaleString()}円</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">オ　ウからエを差し引いた額</span>
+                              <span className="font-medium">{calcResult.excess.toLocaleString()}円</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  };
+
+                  // compound input helper
+                  const renderCompoundInput = (
+                    compoundKey: 'longTermOr' | 'longTermAnd',
+                    field: string,
+                    label: string,
+                  ) => {
+                    const val = (rc[compoundKey] as Record<string, number | boolean>)[field];
+                    if (typeof val === 'boolean') return null;
+                    return (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                        <div className="flex items-center gap-2 max-w-sm">
+                          <input type="number" min={0}
+                            value={(val as number) || ''}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxCost: {
+                                ...prev.reformTaxCost,
+                                [compoundKey]: { ...prev.reformTaxCost[compoundKey], [field]: parseInt(e.target.value) || 0 },
+                              },
+                            }))}
+                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="0" />
+                          <span className="text-sm text-gray-600">円</span>
+                        </div>
+                      </div>
+                    );
+                  };
+
+                  const renderCompoundSubsidy = (
+                    compoundKey: 'longTermOr' | 'longTermAnd',
+                    hasField: string,
+                    amountField: string,
+                    label: string,
+                  ) => {
+                    const hasSub = (rc[compoundKey] as Record<string, number | boolean>)[hasField] as boolean;
+                    return (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                        <div className="flex items-center gap-4 mb-2">
+                          <label className="flex items-center gap-1 text-sm">
+                            <input type="radio" checked={hasSub}
+                              onChange={() => setFormData(prev => ({
+                                ...prev,
+                                reformTaxCost: { ...prev.reformTaxCost, [compoundKey]: { ...prev.reformTaxCost[compoundKey], [hasField]: true } },
+                              }))}
+                              className="w-4 h-4" />
+                            有
+                          </label>
+                          <label className="flex items-center gap-1 text-sm">
+                            <input type="radio" checked={!hasSub}
+                              onChange={() => setFormData(prev => ({
+                                ...prev,
+                                reformTaxCost: { ...prev.reformTaxCost, [compoundKey]: { ...prev.reformTaxCost[compoundKey], [hasField]: false, [amountField]: 0 } },
+                              }))}
+                              className="w-4 h-4" />
+                            無
+                          </label>
+                        </div>
+                        {hasSub && (
+                          <div className="pl-4 border-l-2 border-gray-300">
+                            <label className="block text-xs text-gray-600 mb-1">補助金等の額</label>
+                            <div className="flex items-center gap-2 max-w-sm">
+                              <input type="number" min={0}
+                                value={((rc[compoundKey] as Record<string, number | boolean>)[amountField] as number) || ''}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  reformTaxCost: { ...prev.reformTaxCost, [compoundKey]: { ...prev.reformTaxCost[compoundKey], [amountField]: parseInt(e.target.value) || 0 } },
+                                }))}
+                                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="0" />
+                              <span className="text-sm text-gray-600">円</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <div>
+                      <h2 className="text-xl font-bold mb-2">（３）費用の額等</h2>
+                      <p className="text-sm text-gray-600 mb-6">
+                        工事カテゴリ別の費用と補助金を入力してください。控除対象額・上限適用・超過額は自動計算されます。
+                      </p>
+
+                      <div className="space-y-4">
+                        {renderCategory('seismic', '① 住宅耐震改修', seismicCalc, '250万円', false)}
+                        {renderCategory('barrierFree', '② 高齢者等居住改修工事等', bfCalc, '200万円', true)}
+                        <div>
+                          {renderCategory('energySaving', '③ 一般断熱改修工事等', esCalc, `${hasSolar ? '350' : '250'}万円`, true)}
+                          <div className="mt-2 ml-4">
+                            <label className="flex items-center gap-2 text-sm">
+                              <input type="checkbox"
+                                checked={rc.energySaving.hasSolarPower}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  reformTaxCost: { ...prev.reformTaxCost, energySaving: { ...prev.reformTaxCost.energySaving, hasSolarPower: e.target.checked } },
+                                }))}
+                                className="w-4 h-4 text-blue-600 rounded" />
+                              <span className="text-gray-700">太陽光発電設備を設置（上限350万円に変更）</span>
+                            </label>
+                          </div>
+                        </div>
+                        {renderCategory('cohabitation', '④ 多世帯同居改修工事等', cohabCalc, '250万円', true)}
+
+                        {/* ⑤ 耐久性向上改修工事等（OR: いずれかと併せて） */}
+                        <div className="p-4 border border-gray-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-bold text-sm">⑤ 耐久性向上改修工事等（対象住宅耐震改修又は対象一般断熱改修工事等のいずれかと併せて行う場合）</h4>
+                            <a href="/long-term-housing" target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap ml-2">計算ページへ →</a>
+                          </div>
+                          <div className="space-y-3">
+                            {renderCompoundInput('longTermOr', 'baseTotalAmount', 'ア　当該住宅耐震改修又は当該一般断熱改修工事等に係る標準的な費用の額')}
+                            {renderCompoundSubsidy('longTermOr', 'baseHasSubsidy', 'baseSubsidyAmount', 'イ　当該住宅耐震改修又は当該一般断熱改修工事等に係る補助金等の交付の有無')}
+                            <div className="bg-gray-50 rounded-md p-3 space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">ウ　アからイを差し引いた額（50万円を超える場合）</span>
+                                <span className="font-medium">{lt5BaseDed.toLocaleString()}円</span>
+                              </div>
+                            </div>
+                            {renderCompoundInput('longTermOr', 'durabilityTotalAmount', 'エ　当該耐久性向上改修工事等に係る標準的な費用の額')}
+                            {renderCompoundSubsidy('longTermOr', 'durabilityHasSubsidy', 'durabilitySubsidyAmount', 'オ　当該耐久性向上改修工事等に係る補助金等の交付の有無')}
+                            <div className="bg-gray-50 rounded-md p-3 space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">カ　エからオを差し引いた額（50万円を超える場合）</span>
+                                <span className="font-medium">{lt5DurDed.toLocaleString()}円</span>
+                              </div>
+                            </div>
+                            <div className="bg-blue-50 rounded-md p-3 space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-700 font-medium">キ　ウ及びカの合計額</span>
+                                <span className="font-bold">{lt5Ki.toLocaleString()}円</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">ク　キと{hasSolar ? '350' : '250'}万円のうちいずれか少ない金額</span>
+                                <span className="font-medium">{lt5Ku.toLocaleString()}円</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">ケ　キからクを差し引いた額</span>
+                                <span className="font-medium">{lt5Ke.toLocaleString()}円</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ⑥ 耐久性向上改修工事等（AND: 両方と併せて） */}
+                        <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-bold text-sm">⑥ 耐久性向上改修工事等（対象住宅耐震改修及び対象一般断熱改修工事等の両方と併せて行う場合）</h4>
+                            <a href="/long-term-housing" target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap ml-2">計算ページへ →</a>
+                          </div>
+                          <div className="space-y-3">
+                            {renderCompoundInput('longTermAnd', 'seismicTotalAmount', 'ア　当該住宅耐震改修に係る標準的な費用の額')}
+                            {renderCompoundSubsidy('longTermAnd', 'seismicHasSubsidy', 'seismicSubsidyAmount', 'イ　当該住宅耐震改修に係る補助金等の交付の有無')}
+                            <div className="bg-white rounded-md p-3 space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">ウ　アからイを差し引いた額（50万円を超える場合）</span>
+                                <span className="font-medium">{lt6SesDed.toLocaleString()}円</span>
+                              </div>
+                            </div>
+                            {renderCompoundInput('longTermAnd', 'energyTotalAmount', 'エ　当該一般断熱改修工事等に係る標準的な費用の額')}
+                            {renderCompoundSubsidy('longTermAnd', 'energyHasSubsidy', 'energySubsidyAmount', 'オ　当該一般断熱改修工事等に係る補助金等の交付の有無')}
+                            <div className="bg-white rounded-md p-3 space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">カ　エからオを差し引いた額（50万円を超える場合）</span>
+                                <span className="font-medium">{lt6EnDed.toLocaleString()}円</span>
+                              </div>
+                            </div>
+                            {renderCompoundInput('longTermAnd', 'durabilityTotalAmount', 'キ　当該耐久性向上改修工事等に係る標準的な費用の額')}
+                            {renderCompoundSubsidy('longTermAnd', 'durabilityHasSubsidy', 'durabilitySubsidyAmount', 'ク　当該耐久性向上改修工事等に係る補助金等の交付の有無')}
+                            <div className="bg-white rounded-md p-3 space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">ケ　キからクを差し引いた額（50万円を超える場合）</span>
+                                <span className="font-medium">{lt6DurDed.toLocaleString()}円</span>
+                              </div>
+                            </div>
+                            <div className="bg-green-100 rounded-md p-3 space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-700 font-medium">コ　ウ、カ及びケの合計額</span>
+                                <span className="font-bold">{lt6Ko.toLocaleString()}円</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">サ　コと{hasSolar ? '600' : '500'}万円のうちいずれか少ない金額</span>
+                                <span className="font-medium">{lt6Sa.toLocaleString()}円</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">シ　コからサを差し引いた額</span>
+                                <span className="font-medium">{lt6Shi.toLocaleString()}円</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {renderCategory('childcare', '⑦ 子育て対応改修工事等', ccCalc, '250万円', true)}
+                      </div>
+
+                      {/* ⑧-⑲ パターン比較 */}
+                      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h4 className="font-bold text-sm mb-3">パターン比較（自動計算）</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="grid grid-cols-4 gap-2 font-medium text-gray-600 text-xs border-b pb-1">
+                            <div></div><div className="text-right">ウ合計</div><div className="text-right">エ合計</div><div className="text-right">オ合計</div>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="text-gray-700">⑧⑨⑩ P1</div>
+                            <div className="text-right">{p1Ded.toLocaleString()}</div>
+                            <div className="text-right">{p1Max.toLocaleString()}</div>
+                            <div className="text-right">{p1Exc.toLocaleString()}</div>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="text-gray-700">⑪⑫⑬ P2 (⑤)</div>
+                            <div className="text-right">{p2Ded.toLocaleString()}</div>
+                            <div className="text-right">{p2Max.toLocaleString()}</div>
+                            <div className="text-right">{p2Exc.toLocaleString()}</div>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="text-gray-700">⑭⑮⑯ P3 (⑥)</div>
+                            <div className="text-right">{p3Ded.toLocaleString()}</div>
+                            <div className="text-right">{p3Max.toLocaleString()}</div>
+                            <div className="text-right">{p3Exc.toLocaleString()}</div>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 border-t pt-1 font-semibold">
+                            <div>⑰⑱⑲ 最大</div>
+                            <div className="text-right">{r18.toLocaleString()}</div>
+                            <div className="text-right">{r17.toLocaleString()}</div>
+                            <div className="text-right">{r19.toLocaleString()}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ㉑㉒㉓ 最終計算 */}
+                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="font-bold text-sm mb-3">最終控除額計算</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">㉑ 5%控除の基礎額</span>
+                            <span className="font-medium">{r21.toLocaleString()}円</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-700">㉒ 残り控除可能額（1,000万 - ⑰）</span>
+                            <span className="font-medium">{r22.toLocaleString()}円</span>
+                          </div>
+                          <div className="flex justify-between border-t pt-2 font-bold">
+                            <span>㉓ 5%控除分 = MIN(㉑, ㉒)</span>
+                            <span className="text-green-700">{r23.toLocaleString()}円</span>
+                          </div>
+                          <div className="mt-2 pt-2 border-t text-xs text-gray-600">
+                            <div>10%控除対象: {r17.toLocaleString()}円 → 税額控除: {Math.round(r17 * 0.1).toLocaleString()}円</div>
+                            <div>5%控除対象: {r23.toLocaleString()}円 → 税額控除: {Math.round(r23 * 0.05).toLocaleString()}円</div>
+                            <div className="font-semibold mt-1">合計税額控除: {(Math.round(r17 * 0.1) + Math.round(r23 * 0.05)).toLocaleString()}円</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
               ) : (
                 /* その他の用途: 従来の詳細費用計算 */
                 <CostCalculationStep
@@ -1958,6 +3593,73 @@ export default function CertificateCreatePage() {
                           <div className="pt-2 border-t font-semibold flex justify-between">
                             <span>③ 控除対象額:</span>
                             <span>{deductible.toLocaleString()}円</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">(費用データなし)</p>
+                      );
+                    })()
+                  ) : formData.purposeType === 'reform_tax' ? (
+                    (() => {
+                      const rc = formData.reformTaxCost;
+                      const wt = formData.reformTaxWorkTypes;
+                      const hasSolar = rc.energySaving.hasSolarPower || (wt.energySaving.equipmentTypes.solarPower !== '');
+
+                      const calcCat = (cat: { totalAmount: number; hasSubsidy: boolean; subsidyAmount: number }, limit: number, needOver50: boolean) => {
+                        const sub = cat.hasSubsidy ? cat.subsidyAmount : 0;
+                        const afterSub = cat.totalAmount - sub;
+                        const ded = needOver50 ? (afterSub > 500_000 ? afterSub : 0) : Math.max(0, afterSub);
+                        const maxD = limit > 0 ? Math.min(ded, limit) : ded;
+                        return { total: cat.totalAmount, maxDed: maxD };
+                      };
+
+                      const cats: { label: string; result: { total: number; maxDed: number } }[] = [];
+                      if (rc.seismic.totalAmount > 0) cats.push({ label: '① 住宅耐震改修', result: calcCat(rc.seismic, 2_500_000, false) });
+                      if (rc.barrierFree.totalAmount > 0) cats.push({ label: '② 高齢者等居住改修工事等', result: calcCat(rc.barrierFree, 2_000_000, true) });
+                      if (rc.energySaving.totalAmount > 0) cats.push({ label: '③ 一般断熱改修工事等', result: calcCat(rc.energySaving, hasSolar ? 3_500_000 : 2_500_000, true) });
+                      if (rc.cohabitation.totalAmount > 0) cats.push({ label: '④ 多世帯同居改修工事等', result: calcCat(rc.cohabitation, 2_500_000, true) });
+                      // ⑤ (OR)
+                      {
+                        const lt5t = rc.longTermOr.baseTotalAmount + rc.longTermOr.durabilityTotalAmount;
+                        if (lt5t > 0) {
+                          const lt5Limit = hasSolar ? 3_500_000 : 2_500_000;
+                          const lt5BaseSub = rc.longTermOr.baseHasSubsidy ? rc.longTermOr.baseSubsidyAmount : 0;
+                          const lt5BaseDed = (rc.longTermOr.baseTotalAmount - lt5BaseSub) > 500_000 ? (rc.longTermOr.baseTotalAmount - lt5BaseSub) : 0;
+                          const lt5DurSub = rc.longTermOr.durabilityHasSubsidy ? rc.longTermOr.durabilitySubsidyAmount : 0;
+                          const lt5DurDed = (rc.longTermOr.durabilityTotalAmount - lt5DurSub) > 500_000 ? (rc.longTermOr.durabilityTotalAmount - lt5DurSub) : 0;
+                          const lt5Ki = lt5BaseDed + lt5DurDed;
+                          cats.push({ label: '⑤ 耐久性向上(OR)', result: { total: lt5t, maxDed: Math.min(lt5Ki, lt5Limit) } });
+                        }
+                      }
+                      // ⑥ (AND)
+                      {
+                        const lt6t = rc.longTermAnd.seismicTotalAmount + rc.longTermAnd.energyTotalAmount + rc.longTermAnd.durabilityTotalAmount;
+                        if (lt6t > 0) {
+                          const lt6Limit = hasSolar ? 6_000_000 : 5_000_000;
+                          const lt6SesSub = rc.longTermAnd.seismicHasSubsidy ? rc.longTermAnd.seismicSubsidyAmount : 0;
+                          const lt6SesAfterP = rc.longTermAnd.seismicTotalAmount - lt6SesSub;
+                          const lt6SesDed = lt6SesAfterP > 500_000 ? lt6SesAfterP : 0;
+                          const lt6EnSub = rc.longTermAnd.energyHasSubsidy ? rc.longTermAnd.energySubsidyAmount : 0;
+                          const lt6EnDed = (rc.longTermAnd.energyTotalAmount - lt6EnSub) > 500_000 ? (rc.longTermAnd.energyTotalAmount - lt6EnSub) : 0;
+                          const lt6DurSub = rc.longTermAnd.durabilityHasSubsidy ? rc.longTermAnd.durabilitySubsidyAmount : 0;
+                          const lt6DurDed = (rc.longTermAnd.durabilityTotalAmount - lt6DurSub) > 500_000 ? (rc.longTermAnd.durabilityTotalAmount - lt6DurSub) : 0;
+                          const lt6Ko = lt6SesDed + lt6EnDed + lt6DurDed;
+                          cats.push({ label: '⑥ 耐久性向上(AND)', result: { total: lt6t, maxDed: Math.min(lt6Ko, lt6Limit) } });
+                        }
+                      }
+                      if (rc.childcare.totalAmount > 0) cats.push({ label: '⑦ 子育て対応改修工事等', result: calcCat(rc.childcare, 2_500_000, true) });
+
+                      return cats.length > 0 ? (
+                        <div className="space-y-1 text-sm">
+                          {cats.map(c => (
+                            <div key={c.label} className="flex justify-between">
+                              <span className="text-gray-600">{c.label}:</span>
+                              <span>ア {c.result.total.toLocaleString()}円 → エ {c.result.maxDed.toLocaleString()}円</span>
+                            </div>
+                          ))}
+                          <div className="pt-2 border-t font-semibold flex justify-between">
+                            <span>ア合計:</span>
+                            <span>{cats.reduce((s, c) => s + c.result.total, 0).toLocaleString()}円</span>
                           </div>
                         </div>
                       ) : (
