@@ -113,6 +113,9 @@ export interface Certificate {
   /** UUID (crypto.randomUUID()) */
   id: string;
 
+  /** 所有ユーザーID（認証済みの場合） */
+  userId?: string;
+
   // 基本情報
   applicantName: string;
   applicantAddress: string;
@@ -141,6 +144,9 @@ export interface Certificate {
 
   // 工事データ（ネストして1レコードに保存）
   works: WorkData;
+
+  // 実施した工事の内容（工事種別ごとの説明テキスト）
+  workDescriptions?: Record<string, string>;
 
   // 住宅ローン詳細（housing_loan の場合のみ）
   housingLoanDetail: HousingLoanDetail | null;

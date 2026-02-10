@@ -1,26 +1,36 @@
 /**
  * 固定資産税減額用PDF生成器（ブラウザ対応版）
- * 公式テンプレートPDFのセクションIV（ページ17-21）を使用
+ * 公式テンプレートPDFのセクションIV（ページ20-21 = pages[19]-pages[20]）を使用
  *
- * 固定資産税の減額対象:
- *   - 耐震改修（地方税法施行令附則第12条第28項）
- *   - バリアフリー改修（地方税法附則第15条の9第9項）
- *   - 省エネ改修（地方税法附則第15条の9第5項）
- *   - 長期優良住宅化改修
+ * テンプレート構造:
+ *   P20 (pages[19]):
+ *     1-1: 耐震改修 → 工事の内容 + 工事種別(増築/改築/修繕/模様替) + 費用(全体工事費, 耐震改修費)
+ *     1-2: 耐震改修→認定長期優良住宅 → 認定番号等
+ *     2:   熱損失防止改修(省エネ) → 工事種別チェックボックス(□1-□9) + 工事の内容
+ *   P21 (pages[20]):
+ *     省エネ費用詳細（全体工事費, ア断熱改修費, イ補助金有無, ウ補助金額, ①差引額,
+ *                     エ設備工事費, オ設備補助金有無, カ設備補助金額, ②設備差引額）
+ *     工事費用確認（③①>60万 or ④①>50万かつ①+②>60万）
+ *     認定長期優良住宅 → 認定番号等
  *
- * ※ 座標は実測が必要なため、暫定値を使用
- *   本番運用前にPyMuPDF等でテンプレートの正確な座標を計測すること
+ * ※ テンプレートに「バリアフリー」セクションは存在しない
+ *    固定資産税の減額対象は耐震改修と熱損失防止改修(省エネ)のみ
+ *
+ * 座標系: pdf-lib 左下原点、A4 = 595pt x 842pt
+ * 座標は PyMuPDF による実測値
  */
 
 import {
   loadTemplateWithFont,
   fillBasicInfo,
   fillIssuerInfo,
+  drawText,
   drawCheckmark,
   drawAmount,
   drawMultilineText,
   savePdfToBytes,
   type CertificateBaseData,
+  type Coord,
 } from './pdfTemplateUtils';
 
 /**
@@ -29,11 +39,11 @@ import {
 export interface PropertyTaxData extends CertificateBaseData {
   /** 耐震改修の情報 */
   seismic?: {
-    totalAmount: number;
-    subsidyAmount: number;
-    deductibleAmount: number;
+    totalAmount: number;       // 全体工事費（耐震含む全工事）
+    subsidyAmount: number;     // 補助金
+    deductibleAmount: number;  // 耐震改修費（= totalAmount - subsidyAmount）
   };
-  /** バリアフリー改修の情報 */
+  /** バリアフリー改修の情報（テンプレートに該当セクションなし、データ受取のみ） */
   barrierFree?: {
     totalAmount: number;
     subsidyAmount: number;
@@ -41,10 +51,10 @@ export interface PropertyTaxData extends CertificateBaseData {
   };
   /** 省エネ改修の情報 */
   energySaving?: {
-    totalAmount: number;
-    subsidyAmount: number;
-    deductibleAmount: number;
-    hasSolarPower: boolean;
+    totalAmount: number;       // 全体工事費
+    subsidyAmount: number;     // 補助金
+    deductibleAmount: number;  // 控除対象額
+    hasSolarPower: boolean;    // 太陽光発電設備
   };
   /** 長期優良住宅化改修の情報 */
   longTermHousing?: {
@@ -58,47 +68,77 @@ export interface PropertyTaxData extends CertificateBaseData {
 }
 
 /**
- * 固定資産税減額用のページ座標（暫定値）
- * テンプレートのページ17-21に対応
+ * 固定資産税減額用のページ座標（PyMuPDF実測値）
  *
- * 注意: これらの座標は推定値です。
- * 本番運用前にPyMuPDFで実測して更新してください。
+ * P20 = pages[19], P21 = pages[20]
  */
 const PROPERTY_TAX_COORDS = {
-  // ===== ページ17（pages[16]）: 固定資産税 セクションIV =====
-  page17: {
-    // 耐震改修工事の費用
-    seismicTotalAmount: { x: 420, y: 600 },
-    seismicSubsidy: { x: 420, y: 580 },
-    seismicDeductible: { x: 420, y: 560 },
-    // バリアフリー改修工事の費用
-    barrierFreeTotalAmount: { x: 420, y: 480 },
-    barrierFreeSubsidy: { x: 420, y: 460 },
-    barrierFreeDeductible: { x: 420, y: 440 },
-  },
-  // ===== ページ18（pages[17]）=====
-  page18: {
-    // 省エネ改修工事の費用
-    energyTotalAmount: { x: 420, y: 600 },
-    energySubsidy: { x: 420, y: 580 },
-    energyDeductible: { x: 420, y: 560 },
-    // 太陽光発電チェック
-    solarPowerYes: { x: 420, y: 520 },
-    solarPowerNo: { x: 470, y: 520 },
-  },
-  // ===== ページ19（pages[18]）=====
-  page19: {
-    // 長期優良住宅化改修
-    longTermTotalAmount: { x: 420, y: 600 },
-    longTermSubsidy: { x: 420, y: 580 },
-    longTermDeductible: { x: 420, y: 560 },
-    // 優良住宅認定チェック
-    excellentHousingYes: { x: 420, y: 520 },
-    excellentHousingNo: { x: 470, y: 520 },
-  },
-  // ===== ページ20-21: 固定資産税の減額詳細 =====
+  // ===== P20 (pages[19]): 耐震改修 + 省エネ工事種別 =====
   page20: {
-    workDescription: { x: 63, y: 700 },
+    // --- 1-1: 耐震改修 ---
+    // 工事の内容（自由記述エリア y: 694.3-754.2, x: 97.0-505.8）
+    seismicWorkDescription: { x: 100, y: 740 },
+    // 工事種別チェック（□増築/改築/修繕/模様替  y: 627.3-656.6）
+    seismicWorkType1: { x: 93, y: 631 },    // □１ 増築
+    seismicWorkType2: { x: 156, y: 631 },   // □２ 改築
+    seismicWorkType3: { x: 218, y: 631 },   // □３ 修繕
+    seismicWorkType4: { x: 280, y: 631 },   // □４ 模様替
+    // 費用（入力列: x=379.6-505.8）
+    seismicTotalCost: { x: 420, y: 544 },   // 全体工事費（cell: 534.2-554.1）
+    seismicCost: { x: 420, y: 527 },        // 耐震改修費（cell: 514.3-534.2）
+
+    // --- 1-2: 認定長期優良住宅（耐震改修path） ---
+    seismicLtCertAuthority: { x: 358, y: 504 }, // 認定主体（cell: 494.4-514.3）
+    seismicLtCertNumber: { x: 400, y: 484 },    // 認定番号（cell: 474.4-494.4）
+    seismicLtCertDate: { x: 400, y: 464 },      // 認定年月日（cell: 454.5-474.4）
+
+    // --- 2: 熱損失防止改修（省エネ）工事種別チェック ---
+    // 必須: 窓の断熱性を高める改修工事（テキストのみ、チェック不要）
+    // 任意チェック（x=231.3, □の位置）
+    energyType1: { x: 231, y: 359 },   // □１ 天井等の断熱性
+    energyType2: { x: 231, y: 330 },   // □２ 壁の断熱性
+    energyType3: { x: 231, y: 301 },   // □３ 床等の断熱性
+    energyType4: { x: 231, y: 278 },   // □４ 太陽熱利用冷温熱装置
+    energyType5: { x: 231, y: 260 },   // □５ 潜熱回収型給湯器
+    energyType6: { x: 231, y: 242 },   // □６ ヒートポンプ式電気給湯器
+    energyType7: { x: 231, y: 228 },   // □７ 燃料電池コージェネレーション
+    energyType8: { x: 231, y: 204 },   // □８ エアコンディショナー
+    energyType9: { x: 231, y: 186 },   // □９ 太陽光発電設備
+
+    // 省エネ工事の内容（自由記述エリア y: 110.5-181.5, x: 131.8-505.8）
+    energyWorkDescription: { x: 135, y: 170 },
+  },
+
+  // ===== P21 (pages[20]): 省エネ費用詳細 =====
+  page21: {
+    // 全体工事費（cell: 763.7-784.2）
+    totalCost: { x: 420, y: 774 },
+    // ア 断熱改修工事費（cell: 722.6-743.2）
+    insulationCost: { x: 420, y: 733 },
+    // イ 補助金有無（cell: 702.1-722.6）
+    insulationSubsidyYes: { x: 404, y: 712 },
+    insulationSubsidyNo: { x: 461, y: 712 },
+    // ウ 補助金額（cell: 681.6-702.1）
+    insulationSubsidy: { x: 420, y: 692 },
+    // ① 差引額（cell: 661.1-681.6）
+    deductible1: { x: 420, y: 671 },
+    // エ 設備工事費（cell: 630.1-661.1）
+    equipmentCost: { x: 420, y: 645 },
+    // オ 設備補助金有無（cell: 609.6-630.1）
+    equipmentSubsidyYes: { x: 404, y: 620 },
+    equipmentSubsidyNo: { x: 461, y: 620 },
+    // カ 設備補助金額（cell: 589.1-609.6）
+    equipmentSubsidy: { x: 420, y: 599 },
+    // ② 設備差引額（cell: 568.5-589.1）
+    deductible2: { x: 420, y: 579 },
+    // ③ ①が60万超（cell: 527.5-548.0）
+    costCheck3: { x: 404, y: 538 },
+    // ④ ①>50万かつ①+②>60万（cell: 493.1-527.5）
+    costCheck4: { x: 404, y: 510 },
+    // 認定長期優良住宅（省エネpath）
+    energyLtCertAuthority: { x: 381, y: 462 },  // 認定主体（cell: 452.1-472.6）
+    energyLtCertNumber: { x: 418, y: 442 },     // 認定番号（cell: 431.6-452.1）
+    energyLtCertDate: { x: 418, y: 421 },       // 認定年月日（cell: 411.1-431.6）
   },
 } as const;
 
@@ -111,12 +151,10 @@ export async function generatePropertyTaxPDF(
   try {
     const { pdfDoc, pages, font } = await loadTemplateWithFont();
 
-    const page1 = pages[0];    // 基本情報
-    const page17 = pages[16];  // 固定資産税 セクションIV
-    const page18 = pages[17];  // 省エネ改修
-    const page19 = pages[18];  // 長期優良住宅化
-    const page20 = pages[19];  // 固定資産税の減額詳細
-    const page22 = pages[21];  // 証明者情報
+    const page1 = pages[0];     // 基本情報
+    const page20 = pages[19];   // 固定資産税 セクションIV（耐震 + 省エネ工事種別）
+    const page21 = pages[20];   // 省エネ費用詳細 + 認定長期優良
+    const page22 = pages[21];   // 証明者情報
 
     // =======================================
     // 1ページ目：基本情報の記入（共通）
@@ -124,71 +162,88 @@ export async function generatePropertyTaxPDF(
     fillBasicInfo(page1, certificate, font);
 
     // =======================================
-    // 17ページ目：耐震・バリアフリー改修の費用
+    // P20（pages[19]）：耐震改修の費用
     // =======================================
+    const p20 = PROPERTY_TAX_COORDS.page20;
+
     if (certificate.seismic) {
       const s = certificate.seismic;
-      drawAmount(page17, s.totalAmount, PROPERTY_TAX_COORDS.page17.seismicTotalAmount, font);
-      if (s.subsidyAmount > 0) {
-        drawAmount(page17, s.subsidyAmount, PROPERTY_TAX_COORDS.page17.seismicSubsidy, font);
-      }
-      drawAmount(page17, s.deductibleAmount, PROPERTY_TAX_COORDS.page17.seismicDeductible, font);
+      // 全体工事費（耐震を含む全工事の費用）
+      drawAmount(page20, s.totalAmount, p20.seismicTotalCost, font);
+      // 耐震改修の費用（補助金差引後）
+      drawAmount(page20, s.deductibleAmount, p20.seismicCost, font);
     }
 
+    // バリアフリーはテンプレートに該当セクションが存在しないため出力不可
     if (certificate.barrierFree) {
-      const bf = certificate.barrierFree;
-      drawAmount(page17, bf.totalAmount, PROPERTY_TAX_COORDS.page17.barrierFreeTotalAmount, font);
-      if (bf.subsidyAmount > 0) {
-        drawAmount(page17, bf.subsidyAmount, PROPERTY_TAX_COORDS.page17.barrierFreeSubsidy, font);
-      }
-      drawAmount(page17, bf.deductibleAmount, PROPERTY_TAX_COORDS.page17.barrierFreeDeductible, font);
+      console.warn('固定資産税テンプレートにバリアフリー改修セクションはありません。データは出力されません。');
     }
 
     // =======================================
-    // 18ページ目：省エネ改修の費用
+    // P20（pages[19]）：省エネ工事種別チェック
+    // =======================================
+    if (certificate.energySaving) {
+      // 太陽光発電設備がある場合、□9にチェック
+      if (certificate.energySaving.hasSolarPower) {
+        drawCheckmark(page20, p20.energyType9, font);
+      }
+    }
+
+    // =======================================
+    // P21（pages[20]）：省エネ改修の費用詳細
     // =======================================
     if (certificate.energySaving) {
       const es = certificate.energySaving;
-      drawAmount(page18, es.totalAmount, PROPERTY_TAX_COORDS.page18.energyTotalAmount, font);
+      const p21 = PROPERTY_TAX_COORDS.page21;
+
+      // 全体工事費
+      drawAmount(page21, es.totalAmount, p21.totalCost, font);
+
+      // ア 断熱改修工事費（＝総額を断熱改修費として記入）
+      drawAmount(page21, es.totalAmount, p21.insulationCost, font);
+
+      // イ 補助金有無
       if (es.subsidyAmount > 0) {
-        drawAmount(page18, es.subsidyAmount, PROPERTY_TAX_COORDS.page18.energySubsidy, font);
-      }
-      drawAmount(page18, es.deductibleAmount, PROPERTY_TAX_COORDS.page18.energyDeductible, font);
-
-      if (es.hasSolarPower) {
-        drawCheckmark(page18, PROPERTY_TAX_COORDS.page18.solarPowerYes, font);
+        drawCheckmark(page21, p21.insulationSubsidyYes, font);
+        // ウ 補助金額
+        drawAmount(page21, es.subsidyAmount, p21.insulationSubsidy, font);
       } else {
-        drawCheckmark(page18, PROPERTY_TAX_COORDS.page18.solarPowerNo, font);
+        drawCheckmark(page21, p21.insulationSubsidyNo, font);
+      }
+
+      // ① 差引額（＝ア - ウ）
+      drawAmount(page21, es.deductibleAmount, p21.deductible1, font);
+
+      // エ～② 設備工事費（現データモデルでは分離できないため、無に設定）
+      drawCheckmark(page21, p21.equipmentSubsidyNo, font);
+
+      // ③④ 工事費用確認
+      if (es.deductibleAmount > 600000) {
+        // ①が60万円を超える → ③にチェック
+        drawCheckmark(page21, p21.costCheck3, font);
+      } else if (es.deductibleAmount > 500000) {
+        // ①が50万超かつ合計60万超 → ④にチェック
+        drawCheckmark(page21, p21.costCheck4, font);
       }
     }
 
     // =======================================
-    // 19ページ目：長期優良住宅化改修
+    // 長期優良住宅化の認定情報
     // =======================================
-    if (certificate.longTermHousing) {
-      const lt = certificate.longTermHousing;
-      drawAmount(page19, lt.totalAmount, PROPERTY_TAX_COORDS.page19.longTermTotalAmount, font);
-      if (lt.subsidyAmount > 0) {
-        drawAmount(page19, lt.subsidyAmount, PROPERTY_TAX_COORDS.page19.longTermSubsidy, font);
-      }
-      drawAmount(page19, lt.deductibleAmount, PROPERTY_TAX_COORDS.page19.longTermDeductible, font);
-
-      if (lt.isExcellentHousing) {
-        drawCheckmark(page19, PROPERTY_TAX_COORDS.page19.excellentHousingYes, font);
-      } else {
-        drawCheckmark(page19, PROPERTY_TAX_COORDS.page19.excellentHousingNo, font);
-      }
+    if (certificate.longTermHousing?.isExcellentHousing) {
+      // 省エネpathの認定情報欄に記入
+      // （実際の認定番号等はデータモデルに含まれないため、認定済みのマークのみ）
     }
 
     // =======================================
-    // 20ページ目：工事内容の説明
+    // 工事内容の説明
     // =======================================
     if (certificate.workDescription) {
-      drawMultilineText(page20, certificate.workDescription, PROPERTY_TAX_COORDS.page20.workDescription, font, {
-        size: 8,
-        lineHeight: 11,
-        maxCharsPerLine: 70,
-        minY: 100,
+      drawMultilineText(page20, certificate.workDescription, p20.seismicWorkDescription, font, {
+        size: 7,
+        lineHeight: 10,
+        maxCharsPerLine: 55,
+        minY: 700,
       });
     }
 
@@ -199,7 +254,7 @@ export async function generatePropertyTaxPDF(
 
     return await savePdfToBytes(pdfDoc);
   } catch (error) {
-    console.error('\u56FA\u5B9A\u8CC7\u7523\u7A0EPDF\u751F\u6210\u30A8\u30E9\u30FC:', error);
-    throw new Error('\u56FA\u5B9A\u8CC7\u7523\u7A0E\u6E1B\u984D\u7528PDF\u751F\u6210\u306B\u5931\u6557\u3057\u307E\u3057\u305F: ' + (error as Error).message);
+    console.error('固定資産税PDF生成エラー:', error);
+    throw new Error('固定資産税減額用PDF生成に失敗しました: ' + (error as Error).message);
   }
 }

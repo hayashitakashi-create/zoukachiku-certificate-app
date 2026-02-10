@@ -9,54 +9,118 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [issuerInfo, setIssuerInfo] = useState<Partial<IssuerInfo> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // ローカルストレージから設定を読み込む
+  // APIから証明者情報を読み込み（未認証時のみlocalStorageフォールバック）
   useEffect(() => {
-    const savedSettings = localStorage.getItem('issuer-settings');
-    if (savedSettings) {
+    const loadIssuerInfo = async () => {
       try {
-        const parsed = JSON.parse(savedSettings);
-
-        // 旧データ形式から新形式への移行
-        if (parsed.issuerName && !parsed.organizationType) {
-          const migratedData: Partial<IssuerInfo> = {
-            organizationType: 'registered_architect_office',
-            architectName: parsed.issuerName || '',
-            officeName: parsed.issuerOfficeName || '',
-            architectRegistrationNumber: parsed.issuerQualificationNumber || '',
-          } as any;
-          setIssuerInfo(migratedData);
-        } else {
-          setIssuerInfo(parsed);
+        const res = await fetch('/api/issuer-settings');
+        if (res.ok) {
+          // 認証済み → DB結果を信頼（nullでもlocalStorageにフォールバックしない）
+          const data = await res.json();
+          if (data.issuerInfo) {
+            setIssuerInfo(data.issuerInfo);
+          }
+          // 他ユーザーのデータ漏洩防止のためlocalStorageをクリア
+          localStorage.removeItem('issuer-settings');
+          setIsLoading(false);
+          return;
         }
-      } catch (error) {
-        console.error('Failed to parse saved issuer settings:', error);
+        if (res.status !== 401) {
+          // 401以外のエラー（500等）→ フォールバックせず終了
+          setIsLoading(false);
+          return;
+        }
+        // 401（未認証）→ 下のlocalStorageフォールバックへ
+      } catch {
+        // ネットワークエラー → 下のlocalStorageフォールバックへ
       }
-    }
+
+      // 未認証またはネットワークエラー時のみlocalStorageから読み込み
+      const savedSettings = localStorage.getItem('issuer-settings');
+      if (savedSettings) {
+        try {
+          const parsed = JSON.parse(savedSettings);
+
+          // 旧データ形式から新形式への移行
+          if (parsed.issuerName && !parsed.organizationType) {
+            const migratedData: Partial<IssuerInfo> = {
+              organizationType: 'registered_architect_office',
+              architectName: parsed.issuerName || '',
+              officeName: parsed.issuerOfficeName || '',
+              architectRegistrationNumber: parsed.issuerQualificationNumber || '',
+            } as any;
+            setIssuerInfo(migratedData);
+          } else {
+            setIssuerInfo(parsed);
+          }
+        } catch (error) {
+          console.error('Failed to parse saved issuer settings:', error);
+        }
+      }
+      setIsLoading(false);
+    };
+
+    loadIssuerInfo();
   }, []);
 
-  // 設定を保存
-  const handleSave = () => {
+  // 設定を保存（API優先、フォールバックlocalStorage）
+  const handleSave = async () => {
     setIsSaving(true);
     try {
-      localStorage.setItem('issuer-settings', JSON.stringify(issuerInfo));
+      const res = await fetch('/api/issuer-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issuerInfo }),
+      });
+
+      if (res.ok) {
+        // DB保存成功 → localStorageをクリア（移行完了）
+        localStorage.removeItem('issuer-settings');
+      } else if (res.status === 401) {
+        // 未認証 → localStorageにフォールバック
+        localStorage.setItem('issuer-settings', JSON.stringify(issuerInfo));
+      } else {
+        throw new Error('API error');
+      }
+
       setShowSuccessMessage(true);
       setTimeout(() => {
         setShowSuccessMessage(false);
       }, 3000);
     } catch (error) {
-      console.error('Failed to save issuer settings:', error);
-      alert('設定の保存に失敗しました');
+      // APIエラー時はlocalStorageにフォールバック
+      try {
+        localStorage.setItem('issuer-settings', JSON.stringify(issuerInfo));
+        setShowSuccessMessage(true);
+        setTimeout(() => {
+          setShowSuccessMessage(false);
+        }, 3000);
+      } catch (lsError) {
+        console.error('Failed to save issuer settings:', lsError);
+        alert('設定の保存に失敗しました');
+      }
     } finally {
       setIsSaving(false);
     }
   };
 
   // 設定をクリア
-  const handleClear = () => {
+  const handleClear = async () => {
     if (confirm('証明者情報の設定をクリアしますか？')) {
       localStorage.removeItem('issuer-settings');
       setIssuerInfo(null);
+      // APIからもクリア
+      try {
+        await fetch('/api/issuer-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ issuerInfo: null }),
+        });
+      } catch {
+        // 未認証・エラー時は無視（localStorageは既にクリア済み）
+      }
     }
   };
 
@@ -101,7 +165,7 @@ export default function SettingsPage() {
             <h4 className="text-sm font-semibold text-blue-700 mb-2">使い方</h4>
             <ul className="text-sm text-gray-700 space-y-1">
               <li>- ここで設定した情報は、証明書作成時に自動的に入力されます</li>
-              <li>- 設定はブラウザのローカルストレージに保存されます</li>
+              <li>- 設定はアカウントに紐づけて保存され、別のブラウザや端末でも利用できます</li>
               <li>- 証明書作成時に個別に変更することもできます</li>
             </ul>
           </div>

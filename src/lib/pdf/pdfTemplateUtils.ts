@@ -207,18 +207,27 @@ export const BASE_COORDS = {
     completionDate: { x: 163, y: 683 },
   },
   page22: {
+    // 証明年月日行 (y: 711.1–731.0)
     issueDateYear: { x: 170, y: 717 },
     issueDateMonth: { x: 225, y: 717 },
     issueDateDay: { x: 271, y: 717 },
+    // 氏名行 (y: 619.7–661.8, x: 222.3–505.8)
     issuerName: { x: 230, y: 640 },
-    architectQualification: { x: 230, y: 620 },
+    // 建築士の別 入力 (y: 539.8–619.7, x: 222.3–333.7)
+    architectQualification: { x: 230, y: 580 },
+    // 登録番号 上段 (y: 590.9–619.7, x: 436.7–505.8)
     registrationNumber: { x: 450, y: 605 },
-    registrationPrefecture: { x: 230, y: 605 },
+    // 登録を受けた都道府県名 下段 (y: 539.8–590.9, x: 436.7–505.8)
+    registrationPrefecture: { x: 450, y: 565 },
+    // 名称行 (y: 519.9–539.8, x: 222.3–505.8)
     officeName: { x: 230, y: 530 },
-    officeAddress: { x: 230, y: 510 },
-    officeType: { x: 385, y: 470 },
-    officeRegistrationDate: { x: 230, y: 450 },
-    officeRegistrationNumber: { x: 400, y: 450 },
+    // 所在地行 (y: 491.1–519.9, x: 222.3–505.8)
+    officeAddress: { x: 230, y: 505 },
+    // 事務所の別行 (y: 455.7–491.1, x: 379.6–505.8)
+    officeType: { x: 385, y: 473 },
+    // 登録年月日及び登録番号行 (y: 431.4–455.7, x: 379.6–505.8) 上下2段
+    officeRegistrationDate: { x: 385, y: 447 },
+    officeRegistrationNumber: { x: 385, y: 436 },
   },
 } as const;
 

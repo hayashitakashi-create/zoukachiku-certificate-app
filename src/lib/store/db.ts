@@ -27,9 +27,13 @@ class AppDatabase extends Dexie {
     super(DB_NAME);
 
     // v1: 初期スキーマ
-    // IndexedDB のインデックス定義のみ。全フィールドは自動保存される。
     this.version(1).stores({
       certificates: 'id, status, purposeType, updatedAt, createdAt',
+    });
+
+    // v2: userId インデックス追加（ユーザー別フィルタリング用）
+    this.version(2).stores({
+      certificates: 'id, userId, status, purposeType, updatedAt, createdAt',
     });
   }
 }

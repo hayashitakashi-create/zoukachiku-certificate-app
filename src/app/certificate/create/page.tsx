@@ -3,12 +3,25 @@
 import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import type { IssuerInfo } from '@/types/issuer';
 import IssuerInfoForm from '@/components/IssuerInfoForm';
+import CostCalculationStep, { type WorkDataFormState, convertFormStateToWorkData } from '@/components/CostCalculationStep';
 import { certificateStore, type PurposeType } from '@/lib/store';
 
 // ステップの定義
-type WizardStep = 1 | 2 | 3 | 4;
+type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
+
+// 工事種別ラベル（工事内容記入用）
+const WORK_TYPE_LABELS: Record<string, string> = {
+  seismic: '耐震改修工事',
+  barrierFree: 'バリアフリー改修工事',
+  energySaving: '省エネ改修工事',
+  cohabitation: '同居対応改修工事',
+  childcare: '子育て対応改修工事',
+  longTermHousing: '長期優良住宅化改修工事',
+  otherRenovation: 'その他増改築等工事',
+};
 
 // フォームデータの型定義
 type CertificateFormData = {
@@ -26,15 +39,21 @@ type CertificateFormData = {
 
   // ステップ2: 工事種別
   selectedWorkTypes: string[];
-  subsidyAmount: number;
 
-  // ステップ3: 証明者情報
+  // ステップ3: 費用計算
+  workDataForm: WorkDataFormState;
+
+  // ステップ4: 実施した工事の内容
+  workDescriptions: Record<string, string>;
+
+  // ステップ5: 証明者情報
   issuerInfo: Partial<IssuerInfo> | null;
   issueDate: string;
 };
 
 export default function CertificateCreatePage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [isSaving, setIsSaving] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -53,7 +72,8 @@ export default function CertificateCreatePage() {
     completionDate: '',
     purposeType: '',
     selectedWorkTypes: [],
-    subsidyAmount: 0,
+    workDataForm: {},
+    workDescriptions: {},
     issuerInfo: null,
     issueDate: new Date().toISOString().split('T')[0],
   };
@@ -91,7 +111,7 @@ export default function CertificateCreatePage() {
     }
 
     const savedData = localStorage.getItem('certificate-form-data');
-    let loadedFormData = null;
+    let loadedFormData: CertificateFormData | null = null;
 
     if (savedData) {
       try {
@@ -99,46 +119,83 @@ export default function CertificateCreatePage() {
         if (parsed.sessionId && parsed.sessionId !== currentSessionId) {
           setWasRestored(true);
         }
+        // 旧データとの互換
+        if (!parsed.workDataForm) parsed.workDataForm = {};
+        if (!parsed.workDescriptions) parsed.workDescriptions = {};
         loadedFormData = parsed;
       } catch (error) {
         console.error('Failed to parse saved form data:', error);
       }
     }
 
-    // 証明者設定を読み込む
-    const savedSettings = localStorage.getItem('issuer-settings');
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings);
-        let issuerSettings: Partial<IssuerInfo> | null = null;
-        if (settings.issuerName && !settings.organizationType) {
-          issuerSettings = {
-            organizationType: 'registered_architect_office',
-            architectName: settings.issuerName || '',
-            officeName: settings.issuerOfficeName || '',
-            architectRegistrationNumber: settings.issuerQualificationNumber || '',
-          } as any;
+    // 証明者設定を読み込む（API優先、localStorageフォールバック）
+    // fromApi=true の場合、issuerInfoがnullでもloadedFormDataの値を上書きする（他ユーザーのデータ漏洩防止）
+    const applyIssuerSettings = (issuerSettings: Partial<IssuerInfo> | null, fromApi: boolean) => {
+      if (loadedFormData) {
+        if (fromApi) {
+          // 認証済み → APIの結果で常に上書き（nullでも上書きして前ユーザーのデータを消す）
+          setFormData({ ...loadedFormData, issuerInfo: issuerSettings });
+        } else if (issuerSettings && (!loadedFormData.issuerInfo || !loadedFormData.issuerInfo.organizationType)) {
+          setFormData({ ...loadedFormData, issuerInfo: issuerSettings });
         } else {
-          issuerSettings = settings;
-        }
-
-        if (loadedFormData) {
-          if (!loadedFormData.issuerInfo || !loadedFormData.issuerInfo.organizationType) {
-            loadedFormData = { ...loadedFormData, issuerInfo: issuerSettings };
-          }
           setFormData(loadedFormData);
-        } else {
-          setFormData(prev => ({ ...prev, issuerInfo: issuerSettings }));
         }
-      } catch (error) {
-        console.error('Failed to parse issuer settings:', error);
-        if (loadedFormData) setFormData(loadedFormData);
+      } else if (issuerSettings) {
+        setFormData(prev => ({ ...prev, issuerInfo: issuerSettings }));
       }
-    } else if (loadedFormData) {
-      setFormData(loadedFormData);
-    }
+    };
 
-    setIsInitialized(true);
+    const loadIssuerSettings = async () => {
+      try {
+        const res = await fetch('/api/issuer-settings');
+        if (res.ok) {
+          // 認証済み → DB結果を信頼（nullでもlocalStorageにフォールバックしない）
+          const data = await res.json();
+          applyIssuerSettings(data.issuerInfo ?? null, true);
+          // 他ユーザーのデータ漏洩防止のためlocalStorageをクリア
+          localStorage.removeItem('issuer-settings');
+          setIsInitialized(true);
+          return;
+        }
+        if (res.status !== 401) {
+          // 401以外のエラー → フォールバックせず終了
+          if (loadedFormData) setFormData(loadedFormData);
+          setIsInitialized(true);
+          return;
+        }
+        // 401（未認証）→ 下のlocalStorageフォールバックへ
+      } catch {
+        // ネットワークエラー → 下のlocalStorageフォールバックへ
+      }
+
+      // 未認証またはネットワークエラー時のみlocalStorageから読み込み
+      const savedSettings = localStorage.getItem('issuer-settings');
+      if (savedSettings) {
+        try {
+          const settings = JSON.parse(savedSettings);
+          let issuerSettings: Partial<IssuerInfo> | null = null;
+          if (settings.issuerName && !settings.organizationType) {
+            issuerSettings = {
+              organizationType: 'registered_architect_office',
+              architectName: settings.issuerName || '',
+              officeName: settings.issuerOfficeName || '',
+              architectRegistrationNumber: settings.issuerQualificationNumber || '',
+            } as any;
+          } else {
+            issuerSettings = settings;
+          }
+          applyIssuerSettings(issuerSettings, false);
+        } catch (error) {
+          console.error('Failed to parse issuer settings:', error);
+          if (loadedFormData) setFormData(loadedFormData);
+        }
+      } else if (loadedFormData) {
+        setFormData(loadedFormData);
+      }
+      setIsInitialized(true);
+    };
+
+    loadIssuerSettings();
   }, []);
 
   // フォームデータが変更されたらlocalStorageに自動保存
@@ -158,15 +215,17 @@ export default function CertificateCreatePage() {
     const stepParam = params.get('step');
     if (stepParam) {
       const step = parseInt(stepParam) as WizardStep;
-      if (step >= 1 && step <= 4) setCurrentStep(step);
+      if (step >= 1 && step <= 6) setCurrentStep(step);
     }
   }, []);
 
   const steps = [
     { number: 1, title: '基本情報', description: '申請者・物件情報' },
     { number: 2, title: '工事内容', description: '工事種別の選択' },
-    { number: 3, title: '証明者情報', description: '発行者情報' },
-    { number: 4, title: '確認・保存', description: 'プレビューと保存' },
+    { number: 3, title: '費用計算', description: '標準的な費用の額' },
+    { number: 4, title: '工事記述', description: '実施した工事の内容' },
+    { number: 5, title: '証明者情報', description: '発行者情報' },
+    { number: 6, title: '確認・保存', description: 'プレビューと保存' },
   ];
 
   const goToStep = useCallback((step: WizardStep) => {
@@ -181,7 +240,7 @@ export default function CertificateCreatePage() {
         return;
       }
     }
-    setCurrentStep(prev => (prev < 4 ? (prev + 1) as WizardStep : prev));
+    setCurrentStep(prev => (prev < 6 ? (prev + 1) as WizardStep : prev));
   }, [currentStep, formData]);
 
   const prevStep = useCallback(() => {
@@ -198,6 +257,34 @@ export default function CertificateCreatePage() {
       setWasRestored(false);
     }
   }, [initialFormData]);
+
+  // 費用サマリー（確認画面用）
+  const getCostSummary = useCallback(() => {
+    const workData = convertFormStateToWorkData(formData.workDataForm);
+    let totalAmount = 0;
+    let totalSubsidy = 0;
+    const details: { label: string; total: number; subsidy: number }[] = [];
+
+    const labels: Record<string, string> = {
+      seismic: '耐震改修', barrierFree: 'バリアフリー改修', energySaving: '省エネ改修',
+      cohabitation: '同居対応改修', childcare: '子育て対応改修',
+      longTermHousing: '長期優良住宅化改修', otherRenovation: 'その他増改築',
+    };
+
+    for (const [cat, data] of Object.entries(workData)) {
+      if (data.summary && data.summary.totalAmount > 0) {
+        details.push({
+          label: labels[cat] || cat,
+          total: data.summary.totalAmount,
+          subsidy: data.summary.subsidyAmount,
+        });
+        totalAmount += data.summary.totalAmount;
+        totalSubsidy += data.summary.subsidyAmount;
+      }
+    }
+
+    return { totalAmount, totalSubsidy, details };
+  }, [formData.workDataForm]);
 
   // IndexedDBに保存
   const saveCertificate = async (status: 'draft' | 'completed') => {
@@ -238,8 +325,19 @@ export default function CertificateCreatePage() {
         }
       }
 
+      // WorkData変換
+      const workData = convertFormStateToWorkData(formData.workDataForm);
+
+      // 補助金合計を計算
+      let totalSubsidy = 0;
+      for (const data of Object.values(workData)) {
+        if (data.summary) {
+          totalSubsidy += data.summary.subsidyAmount;
+        }
+      }
+
       // IndexedDBに証明書を新規作成して保存
-      const cert = await certificateStore.createCertificate(formData.purposeType as PurposeType);
+      const cert = await certificateStore.createCertificate(formData.purposeType as PurposeType, session?.user?.id);
       await certificateStore.updateCertificate(cert.id, {
         applicantName: formData.applicantName,
         applicantAddress: fullApplicantAddress,
@@ -252,7 +350,9 @@ export default function CertificateCreatePage() {
         issuerOrganizationType,
         issuerQualificationNumber,
         issuerInfo: formData.issuerInfo as any || null,
-        subsidyAmount: formData.subsidyAmount,
+        subsidyAmount: totalSubsidy,
+        works: workData,
+        workDescriptions: formData.workDescriptions,
         status,
       });
 
@@ -352,7 +452,7 @@ export default function CertificateCreatePage() {
                       <input type="text" value={formData.applicantPostalCode}
                         onChange={(e) => {
                           const value = e.target.value;
-                          setFormData({ ...formData, applicantPostalCode: value });
+                          setFormData(prev => ({ ...prev, applicantPostalCode: value }));
                           if (value.replace(/-/g, '').length === 7) fetchAddressFromPostalCode(value, 'applicant');
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -384,7 +484,7 @@ export default function CertificateCreatePage() {
                       <input type="text" value={formData.propertyPostalCode}
                         onChange={(e) => {
                           const value = e.target.value;
-                          setFormData({ ...formData, propertyPostalCode: value });
+                          setFormData(prev => ({ ...prev, propertyPostalCode: value }));
                           if (value.replace(/-/g, '').length === 7) fetchAddressFromPostalCode(value, 'property');
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -452,7 +552,7 @@ export default function CertificateCreatePage() {
             <div>
               <h2 className="text-xl font-bold mb-4">工事内容の選択</h2>
               <p className="text-sm text-gray-600 mb-4">
-                実施した工事種別を選択してください。詳細な工事データは保存後に証明書編集画面で入力できます。
+                実施した工事種別を選択してください。次のステップで費用を計算します。
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
@@ -486,21 +586,56 @@ export default function CertificateCreatePage() {
                   );
                 })}
               </div>
-
-              {/* 補助金 */}
-              <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">補助金額 (円)</label>
-                <input type="number" value={formData.subsidyAmount}
-                  onChange={(e) => setFormData({ ...formData, subsidyAmount: parseInt(e.target.value) || 0 })}
-                  className="max-w-md w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="例: 100000" />
-                <p className="mt-1 text-xs text-gray-500">国や地方公共団体から受けた補助金がある場合</p>
-              </div>
             </div>
           )}
 
-          {/* ステップ3: 証明者情報 */}
+          {/* ステップ3: 費用計算 */}
           {currentStep === 3 && (
+            <CostCalculationStep
+              selectedWorkTypes={formData.selectedWorkTypes}
+              formState={formData.workDataForm}
+              onChange={(workDataForm) => setFormData(prev => ({ ...prev, workDataForm }))}
+            />
+          )}
+
+          {/* ステップ4: 実施した工事の内容 */}
+          {currentStep === 4 && (
+            <div>
+              <h2 className="text-xl font-bold mb-4">実施した工事の内容</h2>
+              <p className="text-sm text-gray-600 mb-6">
+                選択した工事種別ごとに、実施した工事の内容を記入してください。
+              </p>
+
+              {formData.selectedWorkTypes.length > 0 ? (
+                <div className="space-y-5">
+                  {formData.selectedWorkTypes.map(cat => (
+                    <div key={cat}>
+                      <label className="block text-sm font-semibold text-gray-800 mb-1">
+                        {WORK_TYPE_LABELS[cat] || cat}
+                      </label>
+                      <textarea
+                        value={formData.workDescriptions[cat] || ''}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          workDescriptions: { ...prev.workDescriptions, [cat]: e.target.value },
+                        }))}
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        placeholder={`${WORK_TYPE_LABELS[cat] || ''}の内容を記入...`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  工事種別が選択されていません。ステップ2で工事種別を選択してください。
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ステップ5: 証明者情報 */}
+          {currentStep === 5 && (
             <div>
               <h2 className="text-xl font-bold mb-4">証明者情報</h2>
               <IssuerInfoForm
@@ -516,8 +651,8 @@ export default function CertificateCreatePage() {
             </div>
           )}
 
-          {/* ステップ4: 確認・保存 */}
-          {currentStep === 4 && (
+          {/* ステップ6: 確認・保存 */}
+          {currentStep === 6 && (
             <div>
               <h2 className="text-xl font-bold mb-4">確認と保存</h2>
 
@@ -546,15 +681,77 @@ export default function CertificateCreatePage() {
                     {formData.selectedWorkTypes.length > 0
                       ? `${formData.selectedWorkTypes.length}種別選択済み`
                       : '(未選択)'}
-                    {formData.subsidyAmount > 0 && ` / 補助金: ${formData.subsidyAmount.toLocaleString()}円`}
                   </p>
+                </div>
+
+                {/* 費用サマリープレビュー */}
+                {(() => {
+                  const costSummary = getCostSummary();
+                  return costSummary.totalAmount > 0 ? (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-semibold">費用計算</h3>
+                        <button type="button" onClick={() => goToStep(3)} className="text-xs text-blue-600">編集</button>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        {costSummary.details.map(d => (
+                          <div key={d.label} className="flex justify-between">
+                            <span className="text-gray-600">{d.label}:</span>
+                            <span>{d.total.toLocaleString()}円{d.subsidy > 0 ? ` (補助金: ${d.subsidy.toLocaleString()}円)` : ''}</span>
+                          </div>
+                        ))}
+                        <div className="pt-2 border-t font-semibold flex justify-between">
+                          <span>合計:</span>
+                          <span>{costSummary.totalAmount.toLocaleString()}円</span>
+                        </div>
+                        {costSummary.totalSubsidy > 0 && (
+                          <div className="flex justify-between text-green-700">
+                            <span>補助金合計:</span>
+                            <span>{costSummary.totalSubsidy.toLocaleString()}円</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-semibold">費用計算</h3>
+                        <button type="button" onClick={() => goToStep(3)} className="text-xs text-blue-600">編集</button>
+                      </div>
+                      <p className="text-sm text-gray-500">(費用データなし)</p>
+                    </div>
+                  );
+                })()}
+
+                {/* 工事内容記述プレビュー */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-semibold">実施した工事の内容</h3>
+                    <button type="button" onClick={() => goToStep(4)} className="text-xs text-blue-600">編集</button>
+                  </div>
+                  {formData.selectedWorkTypes.some(cat => formData.workDescriptions[cat]) ? (
+                    <div className="space-y-1 text-sm">
+                      {formData.selectedWorkTypes.map(cat => {
+                        const desc = formData.workDescriptions[cat];
+                        if (!desc) return null;
+                        return (
+                          <div key={cat}>
+                            <span className="text-gray-500">{WORK_TYPE_LABELS[cat]}:</span>{' '}
+                            <span className="whitespace-pre-wrap">{desc}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">(未入力)</p>
+                  )}
                 </div>
 
                 {/* 証明者情報プレビュー */}
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-semibold">証明者情報</h3>
-                    <button type="button" onClick={() => goToStep(3)} className="text-xs text-blue-600">編集</button>
+                    <button type="button" onClick={() => goToStep(5)} className="text-xs text-blue-600">編集</button>
                   </div>
                   <p className="text-sm">
                     {formData.issuerInfo?.organizationType
@@ -590,7 +787,7 @@ export default function CertificateCreatePage() {
             className="px-6 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed">
             前へ
           </button>
-          <button type="button" onClick={nextStep} disabled={currentStep === 4}
+          <button type="button" onClick={nextStep} disabled={currentStep === 6}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
             次へ
           </button>

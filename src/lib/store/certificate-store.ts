@@ -24,8 +24,15 @@ import { createNewCertificate } from './types';
 // 証明書 CRUD
 // =============================================
 
-/** 全証明書を取得（更新日時の降順） */
-export async function listCertificates(): Promise<Certificate[]> {
+/** 証明書を取得（更新日時の降順）。userId指定時はそのユーザーの証明書のみ返す */
+export async function listCertificates(userId?: string): Promise<Certificate[]> {
+  if (userId) {
+    return db.certificates
+      .where('userId')
+      .equals(userId)
+      .reverse()
+      .sortBy('updatedAt');
+  }
   return db.certificates.orderBy('updatedAt').reverse().toArray();
 }
 
@@ -44,8 +51,11 @@ export async function getCertificate(id: string): Promise<Certificate | undefine
 }
 
 /** 新規証明書を作成して返す */
-export async function createCertificate(purposeType: PurposeType = 'housing_loan'): Promise<Certificate> {
+export async function createCertificate(purposeType: PurposeType = 'housing_loan', userId?: string): Promise<Certificate> {
   const cert = createNewCertificate(purposeType);
+  if (userId) {
+    cert.userId = userId;
+  }
   await db.certificates.add(cert);
   return cert;
 }

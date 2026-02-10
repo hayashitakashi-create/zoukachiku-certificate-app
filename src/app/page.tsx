@@ -24,16 +24,18 @@ export default function HomePage() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const userId = session?.user?.id;
+
   const loadCertificates = useCallback(async () => {
     try {
-      const certs = await certificateStore.listCertificates();
+      const certs = await certificateStore.listCertificates(userId);
       setCertificates(certs);
     } catch (error) {
       console.error('Failed to load certificates:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     loadCertificates();
