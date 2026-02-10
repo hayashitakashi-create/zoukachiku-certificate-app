@@ -247,7 +247,7 @@ export function fillBasicInfo(
 
   // 所在地
   const propertyText = certificate.propertyNumber
-    ? `${certificate.propertyNumber}\u3000${certificate.propertyAddress}`
+    ? `${certificate.propertyAddress}\u3000${certificate.propertyNumber}`
     : certificate.propertyAddress;
   drawText(page, propertyText, BASE_COORDS.page1.propertyAddress, font);
 
