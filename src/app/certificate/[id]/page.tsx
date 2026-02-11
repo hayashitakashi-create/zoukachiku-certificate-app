@@ -317,10 +317,10 @@ export default function CertificateDetailPage({
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
-      draft: 'bg-amber-100 text-amber-700',
-      completed: 'bg-green-100 text-green-700',
+      draft: 'bg-stone-100 text-stone-600 px-3 py-1 text-xs font-semibold rounded-full',
+      completed: 'bg-gradient-to-r from-amber-600 to-orange-600 text-white px-3 py-1 text-xs font-semibold rounded-full shadow-sm shadow-amber-600/20',
     };
-    return colors[status] || 'bg-gray-100 text-gray-700';
+    return colors[status] || 'bg-stone-100 text-stone-600 px-3 py-1 text-xs font-semibold rounded-full';
   };
 
   const getPurposeTypeLabel = (purposeType: string) => {
@@ -392,20 +392,20 @@ export default function CertificateDetailPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-600">読み込み中...</p>
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-amber-50/30 to-orange-50/30 flex items-center justify-center">
+        <p className="text-stone-600">読み込み中...</p>
       </div>
     );
   }
 
   if (error || !certificate) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 via-amber-50/30 to-orange-50/30 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 mb-4">{error || '証明書が見つかりません'}</p>
+          <p className="text-stone-600 mb-4">{error || '証明書が見つかりません'}</p>
           <Link
             href="/"
-            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="inline-block bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white shadow-lg shadow-amber-900/20 rounded-full px-5 py-2 text-sm font-semibold transition-all hover:scale-105"
           >
             一覧に戻る
           </Link>
@@ -417,42 +417,42 @@ export default function CertificateDetailPage({
   const workEntries = getWorkEntries();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-amber-50/30 to-orange-50/30">
       {/* ヘッダー */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <header className="bg-white/90 border-b border-stone-200 sticky top-0 z-50 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-gray-500 hover:text-gray-700 text-sm">
+            <Link href="/" className="text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-full h-10 px-4 flex items-center transition-colors text-sm font-medium">
               &larr; 一覧
             </Link>
-            <Link href="/" className="text-lg font-bold text-gray-900 hover:text-blue-600 transition-colors">証明書詳細</Link>
-            <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(certificate.status)}`}>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent">証明書詳細</h1>
+            <span className={getStatusColor(certificate.status)}>
               {getStatusLabel(certificate.status)}
             </span>
           </div>
           <div className="flex items-center gap-2 no-print">
             <Link
               href={`/certificate/${certificateId}/preview`}
-              className="px-3 py-1.5 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+              className="bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white shadow-lg shadow-amber-900/20 rounded-full px-5 py-2 text-sm font-semibold transition-all hover:scale-105"
             >
               プレビュー
             </Link>
             <button
               onClick={handleDownloadPdf}
               disabled={generatingPdf}
-              className="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white shadow-lg shadow-amber-900/20 rounded-full px-5 py-2 text-sm font-semibold transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {generatingPdf ? 'PDF生成中...' : 'PDF'}
             </button>
             <button
               onClick={() => window.print()}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="bg-stone-200 text-stone-700 hover:bg-stone-300 rounded-full px-5 py-2 text-sm font-semibold transition-all"
             >
               印刷
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700"
+              className="bg-red-500 text-white hover:bg-red-600 rounded-full px-5 py-2 text-sm font-semibold transition-all"
             >
               削除
             </button>
@@ -460,38 +460,38 @@ export default function CertificateDetailPage({
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {/* 基本情報 */}
-        <section className="bg-white rounded-lg border border-gray-200 p-6">
+        <section className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 sm:p-6 md:p-8 transition-all hover:shadow-2xl hover:shadow-stone-300/50">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-800">基本情報</h2>
+            <h2 className="text-lg font-bold text-stone-800">基本情報</h2>
             <Link
               href={`/certificate/create?id=${certificateId}&step=1`}
-              className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded no-print"
+              className="text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-full px-4 py-1.5 text-sm font-medium transition-all no-print"
             >
               編集
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">申請者氏名</label>
-              <p className="text-gray-900">{certificate.applicantName || '-'}</p>
+              <label className="block text-sm font-semibold text-stone-500 mb-1">申請者氏名</label>
+              <p className="text-stone-900">{certificate.applicantName || '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">申請者住所</label>
-              <p className="text-gray-900">{certificate.applicantAddress || '-'}</p>
+              <label className="block text-sm font-semibold text-stone-500 mb-1">申請者住所</label>
+              <p className="text-stone-900">{certificate.applicantAddress || '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">家屋番号</label>
-              <p className="text-gray-900">{certificate.propertyNumber || '-'}</p>
+              <label className="block text-sm font-semibold text-stone-500 mb-1">家屋番号</label>
+              <p className="text-stone-900">{certificate.propertyNumber || '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">物件所在地</label>
-              <p className="text-gray-900">{certificate.propertyAddress || '-'}</p>
+              <label className="block text-sm font-semibold text-stone-500 mb-1">物件所在地</label>
+              <p className="text-stone-900">{certificate.propertyAddress || '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">工事完了年月日</label>
-              <p className="text-gray-900">
+              <label className="block text-sm font-semibold text-stone-500 mb-1">工事完了年月日</label>
+              <p className="text-stone-900">
                 {certificate.completionDate
                   ? new Date(certificate.completionDate).toLocaleDateString('ja-JP')
                   : '-'}
@@ -501,29 +501,29 @@ export default function CertificateDetailPage({
         </section>
 
         {/* 用途区分 */}
-        <section className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">用途区分</h2>
-          <p className="text-gray-900">{getPurposeTypeLabel(certificate.purposeType)}</p>
+        <section className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 sm:p-6 md:p-8 transition-all hover:shadow-2xl hover:shadow-stone-300/50">
+          <h2 className="text-lg font-bold text-stone-800 mb-4">用途区分</h2>
+          <p className="text-stone-900">{getPurposeTypeLabel(certificate.purposeType)}</p>
 
           {certificate.purposeType === 'housing_loan' && certificate.housingLoanDetail && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="font-semibold text-blue-900 mb-2">住宅借入金等特別控除 詳細</h3>
+            <div className="mt-4 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 rounded-2xl border-2 border-amber-200 p-4">
+              <h3 className="font-semibold text-stone-800 mb-2">住宅借入金等特別控除 詳細</h3>
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div>
-                  <span className="text-blue-600">工事費総額</span>
-                  <p className="font-semibold">
+                  <span className="text-sm font-semibold text-stone-500">工事費総額</span>
+                  <p className="font-semibold text-stone-900">
                     {certificate.housingLoanDetail.totalCost.toLocaleString()}円
                   </p>
                 </div>
                 <div>
-                  <span className="text-blue-600">補助金額</span>
-                  <p className="font-semibold">
+                  <span className="text-sm font-semibold text-stone-500">補助金額</span>
+                  <p className="font-semibold text-stone-900">
                     {certificate.housingLoanDetail.subsidyAmount.toLocaleString()}円
                   </p>
                 </div>
                 <div>
-                  <span className="text-blue-600">控除対象額</span>
-                  <p className="font-bold text-blue-900">
+                  <span className="text-sm font-semibold text-stone-500">控除対象額</span>
+                  <p className="font-bold text-stone-900">
                     {certificate.housingLoanDetail.deductibleAmount.toLocaleString()}円
                   </p>
                 </div>
@@ -531,7 +531,7 @@ export default function CertificateDetailPage({
               <div className="mt-3 no-print">
                 <Link
                   href={`/certificate/housing-loan-detail?certificateId=${certificateId}`}
-                  className="text-sm text-blue-600 hover:text-blue-800"
+                  className="text-amber-700 hover:text-amber-800 font-semibold text-sm"
                 >
                   詳細を編集 &rarr;
                 </Link>
@@ -540,11 +540,11 @@ export default function CertificateDetailPage({
           )}
 
           {certificate.purposeType === 'housing_loan' && !certificate.housingLoanDetail && (
-            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg no-print">
-              <p className="text-sm text-yellow-800 mb-2">住宅借入金等特別控除の詳細がまだ入力されていません。</p>
+            <div className="mt-4 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 rounded-2xl border-2 border-amber-200 p-4 no-print">
+              <p className="text-sm text-stone-600 mb-2">住宅借入金等特別控除の詳細がまだ入力されていません。</p>
               <Link
                 href={`/certificate/housing-loan-detail?certificateId=${certificateId}`}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                className="text-amber-700 hover:text-amber-800 font-semibold text-sm"
               >
                 詳細を入力 &rarr;
               </Link>
@@ -553,36 +553,36 @@ export default function CertificateDetailPage({
         </section>
 
         {/* 証明者情報 */}
-        <section className="bg-white rounded-lg border border-gray-200 p-6">
+        <section className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 sm:p-6 md:p-8 transition-all hover:shadow-2xl hover:shadow-stone-300/50">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-800">証明者情報</h2>
+            <h2 className="text-lg font-bold text-stone-800">証明者情報</h2>
             <Link
               href={`/certificate/create?id=${certificateId}&step=3`}
-              className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded no-print"
+              className="text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-full px-4 py-1.5 text-sm font-medium transition-all no-print"
             >
               編集
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">証明者氏名</label>
-              <p className="text-gray-900">{certificate.issuerName || '-'}</p>
+              <label className="block text-sm font-semibold text-stone-500 mb-1">証明者氏名</label>
+              <p className="text-stone-900">{certificate.issuerName || '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">所属事務所名</label>
-              <p className="text-gray-900">{certificate.issuerOfficeName || '-'}</p>
+              <label className="block text-sm font-semibold text-stone-500 mb-1">所属事務所名</label>
+              <p className="text-stone-900">{certificate.issuerOfficeName || '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">組織種別</label>
-              <p className="text-gray-900">{certificate.issuerOrganizationType || '-'}</p>
+              <label className="block text-sm font-semibold text-stone-500 mb-1">組織種別</label>
+              <p className="text-stone-900">{certificate.issuerOrganizationType || '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">資格番号</label>
-              <p className="text-gray-900">{certificate.issuerQualificationNumber || '-'}</p>
+              <label className="block text-sm font-semibold text-stone-500 mb-1">資格番号</label>
+              <p className="text-stone-900">{certificate.issuerQualificationNumber || '-'}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-500 mb-1">発行日</label>
-              <p className="text-gray-900">
+              <label className="block text-sm font-semibold text-stone-500 mb-1">発行日</label>
+              <p className="text-stone-900">
                 {certificate.issueDate
                   ? new Date(certificate.issueDate).toLocaleDateString('ja-JP')
                   : '-'}
@@ -592,20 +592,20 @@ export default function CertificateDetailPage({
         </section>
 
         {/* 改修工事一覧 */}
-        <section className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">改修工事一覧</h2>
+        <section className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 sm:p-6 md:p-8 transition-all hover:shadow-2xl hover:shadow-stone-300/50">
+          <h2 className="text-lg font-bold text-stone-800 mb-4">改修工事一覧</h2>
 
           {workEntries.length > 0 ? (
             <div className="space-y-3 mb-6">
               {workEntries.map((entry) => (
                 <div
                   key={entry.key}
-                  className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
+                  className="bg-white border-2 border-stone-200 rounded-2xl p-5 hover:border-amber-300 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-semibold text-gray-900">{entry.label}</h3>
-                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                      <h3 className="font-semibold text-stone-900">{entry.label}</h3>
+                      <div className="flex items-center gap-4 mt-1 text-sm text-stone-600">
                         <span>{entry.itemCount}件の工事項目</span>
                         {entry.summary && (
                           <>
@@ -618,13 +618,13 @@ export default function CertificateDetailPage({
                     <div className="flex gap-2 no-print">
                       <Link
                         href={`/${getRenovationPath(entry.key)}?certificateId=${certificateId}`}
-                        className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded"
+                        className="text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-full px-4 py-1.5 text-sm font-medium transition-all"
                       >
                         編集
                       </Link>
                       <button
                         onClick={() => handleDeleteWork(entry.key)}
-                        className="px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded"
+                        className="bg-red-500 text-white hover:bg-red-600 rounded-full px-5 py-2 text-sm font-semibold transition-all"
                       >
                         削除
                       </button>
@@ -634,15 +634,15 @@ export default function CertificateDetailPage({
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500 mb-6">
+            <div className="text-center py-8 text-stone-500 mb-6">
               <p>まだ改修工事が登録されていません</p>
-              <p className="text-sm mt-1">下記から工事を追加してください</p>
+              <p className="text-sm mt-1 text-stone-400">下記から工事を追加してください</p>
             </div>
           )}
 
           {/* 工事追加ボタン */}
-          <div className="border-t pt-4 no-print">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">工事を追加</h3>
+          <div className="border-t border-stone-200 pt-4 no-print">
+            <h3 className="text-sm font-semibold text-stone-500 mb-3">工事を追加</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {[
                 { key: 'seismic', path: 'seismic-reform' },
@@ -656,10 +656,10 @@ export default function CertificateDetailPage({
                 <Link
                   key={key}
                   href={`/${path}?certificateId=${certificateId}`}
-                  className="flex items-center gap-2 p-3 border-2 border-dashed border-gray-300
-                             rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors text-sm"
+                  className="flex items-center gap-2 p-3 border-2 border-dashed border-stone-300
+                             rounded-2xl hover:border-amber-400 hover:bg-amber-50 transition-colors text-sm"
                 >
-                  <span className="font-medium text-gray-700">{getRenovationLabel(key)}</span>
+                  <span className="font-medium text-stone-700">{getRenovationLabel(key)}</span>
                 </Link>
               ))}
             </div>
@@ -667,7 +667,7 @@ export default function CertificateDetailPage({
         </section>
 
         {/* メタ情報 */}
-        <section className="text-xs text-gray-400 space-y-1">
+        <section className="text-xs text-stone-400 space-y-1">
           <p>作成日: {new Date(certificate.createdAt).toLocaleString('ja-JP')}</p>
           <p>更新日: {new Date(certificate.updatedAt).toLocaleString('ja-JP')}</p>
           <p>ID: {certificate.id}</p>
@@ -676,24 +676,24 @@ export default function CertificateDetailPage({
 
       {/* 削除確認モーダル */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">証明書を削除しますか？</h3>
-            <p className="text-sm text-gray-600 mb-6">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 max-w-md w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-stone-900 mb-2">証明書を削除しますか？</h3>
+            <p className="text-sm text-stone-600 mb-6">
               この操作は取り消せません。本当に削除してもよろしいですか？
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowDeleteModal(false)}
                 disabled={deleting}
-                className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50"
+                className="bg-stone-200 text-stone-700 rounded-full px-6 py-2.5 text-sm font-semibold hover:bg-stone-300 transition-all disabled:opacity-50"
               >
                 キャンセル
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                className="bg-red-500 text-white rounded-full px-6 py-2.5 text-sm font-semibold hover:bg-red-600 transition-all disabled:opacity-50"
               >
                 {deleting ? '削除中...' : '削除する'}
               </button>

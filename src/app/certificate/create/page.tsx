@@ -1062,7 +1062,7 @@ export default function CertificateCreatePage() {
         {/* ヘッダー */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent">
+            <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent">
               増改築等工事証明書 作成
             </h1>
             <div className="flex gap-3">
@@ -1080,7 +1080,7 @@ export default function CertificateCreatePage() {
         </div>
 
         {/* ステップインジケーター */}
-        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 mb-6">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-3 sm:p-4 mb-6">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => (
               <div key={step.number} className="flex items-center flex-1">
@@ -1089,7 +1089,7 @@ export default function CertificateCreatePage() {
                   onClick={() => goToStep(step.number as WizardStep)}
                   className={`flex flex-col items-center ${currentStep >= step.number ? 'opacity-100' : 'opacity-40'}`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
+                  <div className={`w-8 h-8 text-xs sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold sm:text-sm transition-all ${
                     currentStep === step.number ? 'bg-gradient-to-r from-amber-700 to-stone-700 text-white shadow-lg shadow-amber-900/20'
                     : currentStep > step.number ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'
                     : 'bg-stone-200 text-stone-500'
@@ -1107,7 +1107,7 @@ export default function CertificateCreatePage() {
         </div>
 
         {/* コンテンツ */}
-        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-6">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 sm:p-6">
           {/* ステップ1: 基本情報 */}
           {currentStep === 1 && (
             <div>
@@ -4002,11 +4002,11 @@ export default function CertificateCreatePage() {
         {/* ナビゲーションボタン */}
         <div className="flex justify-between mt-6">
           <button type="button" onClick={prevStep} disabled={currentStep === 1}
-            className="px-6 py-3 bg-stone-200 text-stone-700 rounded-full hover:bg-stone-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors">
+            className="px-4 py-2.5 sm:px-6 sm:py-3 bg-stone-200 text-stone-700 rounded-full hover:bg-stone-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors">
             前へ
           </button>
           <button type="button" onClick={nextStep} disabled={currentStep === 6}
-            className="px-6 py-3 bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white rounded-full shadow-xl shadow-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all hover:scale-105 disabled:hover:scale-100">
+            className="px-4 py-2.5 sm:px-6 sm:py-3 bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white rounded-full shadow-xl shadow-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all hover:scale-105 disabled:hover:scale-100">
             次へ
           </button>
         </div>

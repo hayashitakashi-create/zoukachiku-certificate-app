@@ -153,8 +153,8 @@ function ChildcareReformContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-amber-50/30 to-orange-50/30">
       <header className="bg-white/90 border-b border-stone-200 sticky top-0 z-50 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent">子育て対応改修工事</h1>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
+          <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent">子育て対応改修工事</h1>
           <Link
             href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=4'}
             className="text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-full h-10 px-4 flex items-center transition-colors text-sm font-medium"
@@ -164,10 +164,10 @@ function ChildcareReformContent() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* 証明書情報表示 */}
         {certificateId && certificateInfo && (
-          <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 rounded-2xl border-2 border-amber-200 p-5 mb-6">
+          <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 rounded-2xl border-2 border-amber-200 p-4 sm:p-5 mb-6">
             <h2 className="font-bold text-amber-900 mb-2">証明書情報</h2>
             <div className="text-sm text-amber-800 space-y-1">
               <p><strong>申請者:</strong> {certificateInfo.applicantName}</p>
@@ -177,13 +177,13 @@ function ChildcareReformContent() {
         )}
 
 
-        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-8 mb-6">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 sm:p-6 md:p-8 mb-6">
           <h2 className="text-xl font-semibold text-stone-800 mb-4">工事内容入力</h2>
 
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-6">
               {fields.map((field, index) => (
-                <div key={field.id} className="border-2 border-stone-200 rounded-2xl p-5 relative hover:border-amber-200 transition-colors">
+                <div key={field.id} className="border-2 border-stone-200 rounded-2xl p-4 sm:p-5 relative hover:border-amber-200 transition-colors">
                   {fields.length > 1 && (
                     <button
                       type="button"
@@ -306,7 +306,7 @@ function ChildcareReformContent() {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="w-full bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white shadow-xl shadow-amber-900/20 transition-all h-14 rounded-full text-base font-semibold hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                className="w-full bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white shadow-xl shadow-amber-900/20 transition-all h-12 sm:h-14 rounded-full text-base font-semibold hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {isSaving ? '保存中...' : certificateId ? '工事データを保存' : '計算結果を反映'}
               </button>

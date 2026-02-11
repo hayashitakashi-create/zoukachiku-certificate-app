@@ -94,7 +94,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
         {/* 建築士情報 */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-4">証明を行った建築士</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 氏名 *
@@ -143,7 +143,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
             ))}
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 登録番号 *
@@ -183,7 +183,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
         {/* 事務所情報 */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-4">証明を行った建築士の属する建築士事務所</h3>
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 名称 *
@@ -248,7 +248,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 登録年月日
@@ -291,7 +291,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
         {/* 機関情報 */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-4">証明を行った指定確認検査機関</h3>
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 名称 *
@@ -320,7 +320,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
                 placeholder="東京都千代田区○○ 1-2-3"
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   指定年月日
@@ -369,7 +369,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
         {/* 調査を行った建築士 */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-4">調査を行った建築士又は建築基準適合判定資格者</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 氏名 *
@@ -418,7 +418,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
             ))}
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 登録番号
@@ -485,7 +485,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
           </div>
 
           {info?.buildingStandardCertifier && info?.buildingStandardCertifier !== 'none' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   登録番号
@@ -530,7 +530,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
         {/* 機関情報 */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-4">証明を行った登録住宅性能評価機関</h3>
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 名称 *
@@ -559,7 +559,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
                 placeholder="東京都千代田区○○ 1-2-3"
               />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   登録年月日
@@ -608,7 +608,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
         {/* 調査を行った建築士 */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-4">調査を行った建築士又は建築基準適合判定資格者</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 氏名 *
@@ -657,7 +657,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
             ))}
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 登録番号
@@ -724,7 +724,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
           </div>
 
           {info?.buildingStandardCertifier && info?.buildingStandardCertifier !== 'none' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   登録番号
@@ -769,7 +769,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
         {/* 法人情報 */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-4">証明を行った住宅瑕疵担保責任保険法人</h3>
-          <div className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 名称 *
@@ -817,7 +817,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
         {/* 調査を行った建築士 */}
         <div className="border-b pb-6">
           <h3 className="text-lg font-semibold mb-4">調査を行った建築士又は建築基準適合判定資格者</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 氏名 *
@@ -866,7 +866,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
             ))}
           </div>
 
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 登録番号
@@ -933,7 +933,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
           </div>
 
           {info?.buildingStandardCertifier && info?.buildingStandardCertifier !== 'none' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   登録番号

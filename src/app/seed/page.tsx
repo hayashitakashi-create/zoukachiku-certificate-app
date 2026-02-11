@@ -184,16 +184,16 @@ function buildCertificates(): Certificate[] {
     const works = createEmptyWorkData();
     works.cohabitation = {
       items: [
-        workItem({ id: 'co1', workTypeCode: 'cohab_kitchen', workName: 'キッチンの増設工事', category: '同居対応', unitPrice: 362500, unit: '箇所', quantity: 1, residentRatio: 100, calculatedAmount: 362500 }),
-        workItem({ id: 'co2', workTypeCode: 'cohab_bathroom', workName: '浴室の増設工事', category: '同居対応', unitPrice: 471700, unit: '箇所', quantity: 1, residentRatio: 100, calculatedAmount: 471700 }),
+        workItem({ id: 'co1', workTypeCode: 'cohab_kitchen_full', workName: '調理室増設（ミニキッチン以外のキッチンの設置）', category: '調理室の増設', unitPrice: 1622000, unit: '箇所', quantity: 1, residentRatio: 100, calculatedAmount: 1622000 }),
+        workItem({ id: 'co2', workTypeCode: 'cohab_bath_with_heater', workName: '浴室増設（給湯設備の設置又は取替えを伴う浴槽の設置）', category: '浴室の増設', unitPrice: 1373800, unit: '箇所', quantity: 1, residentRatio: 100, calculatedAmount: 1373800 }),
       ],
-      summary: summary(834200, 0),
+      summary: summary(2995800, 0),
     };
     const hl = createEmptyHousingLoanDetail();
-    hl.totalCost = 834200;
+    hl.totalCost = 2995800;
     hl.hasSubsidy = false;
     hl.subsidyAmount = 0;
-    hl.deductibleAmount = 834200;
+    hl.deductibleAmount = 2500000;
     hl.workDescription = '二世帯同居のためのキッチン・浴室増設工事';
     hl.workTypes = { work5: { selected: true, description: '同居対応改修' } };
 
@@ -313,9 +313,10 @@ function buildCertificates(): Certificate[] {
     };
     works.longTermHousing = {
       items: [
-        workItem({ id: 'lh1', workTypeCode: 'lth_structure', workName: '構造躯体の劣化対策工事', category: '長期優良', unitPrice: 45000, unit: '㎡', quantity: 80, residentRatio: 100, calculatedAmount: 3600000 }),
+        workItem({ id: 'lh1', workTypeCode: 'lth_bathroom_unit_bath', workName: '浴室のユニットバス化', category: '浴室又は脱衣室の防水工事', unitPrice: 896900, unit: '箇所', quantity: 2, residentRatio: 100, calculatedAmount: 1793800 }),
+        workItem({ id: 'lh2', workTypeCode: 'lth_underfloor_concrete', workName: '床下のコンクリート打設', category: '床下の防湿工事', unitPrice: 12700, unit: '㎡', quantity: 50, residentRatio: 100, calculatedAmount: 635000 }),
       ],
-      summary: summary(3600000, 0, { isExcellentHousing: true }),
+      summary: summary(2428800, 0, { isExcellentHousing: true }),
     };
 
     certs.push(makeCert({
@@ -345,17 +346,17 @@ function buildCertificates(): Certificate[] {
     const works = createEmptyWorkData();
     works.childcare = {
       items: [
-        workItem({ id: 'cc1', workTypeCode: 'childcare_fence', workName: '転落防止柵の設置工事', category: '子育て対応', unitPrice: 45000, unit: '箇所', quantity: 3, residentRatio: 100, calculatedAmount: 135000 }),
-        workItem({ id: 'cc2', workTypeCode: 'childcare_door_safety', workName: '開戸の安全装置設置工事', category: '子育て対応', unitPrice: 28000, unit: '箇所', quantity: 6, residentRatio: 100, calculatedAmount: 168000 }),
+        workItem({ id: 'cc1', workTypeCode: 'childcare_child_fence_prefab', workName: 'チャイルドフェンスの設置工事（既製品の取付け）', category: '子どもの事故を防止するための工事', unitPrice: 15000, unit: '箇所', quantity: 3, residentRatio: 100, calculatedAmount: 45000 }),
+        workItem({ id: 'cc2', workTypeCode: 'childcare_door_finger_guard', workName: '室内ドアの指の挟み込み防止措置工事', category: '子どもの事故を防止するための工事', unitPrice: 104500, unit: '箇所', quantity: 6, residentRatio: 100, calculatedAmount: 627000 }),
       ],
-      summary: summary(303000, 0),
+      summary: summary(672000, 0),
     };
     const hl = createEmptyHousingLoanDetail();
-    hl.totalCost = 303000;
+    hl.totalCost = 672000;
     hl.hasSubsidy = false;
     hl.subsidyAmount = 0;
-    hl.deductibleAmount = 303000;
-    hl.workDescription = '子育て環境改善のための転落防止柵・安全装置設置';
+    hl.deductibleAmount = 672000;
+    hl.workDescription = '子育て環境改善のためのチャイルドフェンス・ドア安全装置設置';
     hl.workTypes = { work6: { selected: true, description: '子育て対応改修' } };
 
     certs.push(makeCert({
@@ -572,22 +573,62 @@ export default function SeedPage() {
   }, [sessionStatus, session, router, status]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow max-w-md w-full text-center">
-        <h1 className="text-xl font-bold mb-4">テストデータ登録</h1>
-        {status === 'loading' && <p className="text-gray-500">登録中...</p>}
-        {status === 'done' && <p className="text-green-600 font-medium">{message}</p>}
-        {status === 'error' && (
-          <>
-            <p className="text-red-600 font-medium">{message}</p>
-            <button
-              onClick={() => router.push('/')}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              トップページへ
-            </button>
-          </>
-        )}
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-amber-50/30 to-orange-50/30 flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        {/* Logo Section */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-amber-700 to-stone-700 rounded-3xl shadow-xl shadow-amber-900/20 mb-4 rotate-3 hover:rotate-0 transition-transform">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+            </svg>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent mb-2">
+            テストデータ登録
+          </h1>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-5 sm:p-8 transition-all hover:shadow-2xl hover:shadow-stone-300/50 text-center">
+          {status === 'loading' && (
+            <div className="space-y-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 bg-amber-50 rounded-full">
+                <svg className="w-6 h-6 text-amber-700 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </div>
+              <p className="text-stone-500 text-sm font-medium">登録中...</p>
+            </div>
+          )}
+          {status === 'done' && (
+            <div className="space-y-4">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-4">
+                <p className="text-green-700 font-medium text-sm flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {message}
+                </p>
+              </div>
+            </div>
+          )}
+          {status === 'error' && (
+            <div className="space-y-4">
+              <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm font-medium">
+                {message}
+              </div>
+              <button
+                onClick={() => router.push('/')}
+                className="bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white shadow-xl shadow-amber-900/20 transition-all h-12 px-6 sm:h-14 sm:px-8 rounded-full text-base font-semibold hover:scale-105"
+              >
+                トップページへ
+              </button>
+            </div>
+          )}
+          {status === 'idle' && (
+            <p className="text-stone-500 text-sm font-medium">準備中...</p>
+          )}
+        </div>
       </div>
     </div>
   );
