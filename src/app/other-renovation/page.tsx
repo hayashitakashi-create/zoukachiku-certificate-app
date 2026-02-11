@@ -79,7 +79,17 @@ function OtherRenovationContent() {
 
   const onSubmit = async (data: OtherRenovationFormData) => {
     if (!certificateId) {
-      alert('証明書IDが指定されていません');
+      // 計算を実行して結果をlocalStorageに保存（証明書作成フロー用）
+      const totalAmount = calculateOtherRenovationTotal(
+        data.works.map((work) => ({
+          amount: work.amount,
+          ratio: work.residentRatio,
+        }))
+      );
+      localStorage.setItem('calc_result_otherRenovation', String(totalAmount));
+      alert(`計算結果: ${totalAmount.toLocaleString()}円\n証明書作成ページに反映します。`);
+      window.close();
+      router.push('/certificate/create?step=4');
       return;
     }
 
@@ -126,68 +136,61 @@ function OtherRenovationContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold text-gray-900">その他増改築等工事</h1>
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-amber-50/30 to-orange-50/30">
+      <header className="bg-white/90 border-b border-stone-200 sticky top-0 z-50 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+          <h1 className="text-xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent">その他増改築等工事</h1>
           <Link
-            href={certificateId ? `/certificate/${certificateId}` : '/'}
-            className="text-sm text-gray-500 hover:text-gray-700"
+            href={certificateId ? `/certificate/${certificateId}` : '/certificate/create?step=4'}
+            className="text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-full h-10 px-4 flex items-center transition-colors text-sm font-medium"
           >
-            &larr; {certificateId ? '証明書詳細へ戻る' : '一覧へ戻る'}
+            &larr; {certificateId ? '証明書詳細へ戻る' : '（３）費用の額等へ戻る'}
           </Link>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-8">
         {/* 証明書情報表示 */}
         {certificateId && certificateInfo && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h2 className="font-semibold text-blue-900 mb-2">証明書情報</h2>
-            <div className="text-sm text-blue-800 space-y-1">
+          <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 rounded-2xl border-2 border-amber-200 p-5 mb-6">
+            <h2 className="font-bold text-amber-900 mb-2">証明書情報</h2>
+            <div className="text-sm text-amber-800 space-y-1">
               <p><strong>申請者:</strong> {certificateInfo.applicantName}</p>
               <p><strong>物件所在地:</strong> {certificateInfo.propertyAddress}</p>
             </div>
           </div>
         )}
 
-        {!certificateId && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-yellow-800 text-sm">
-              証明書IDが指定されていません。証明書作成フローから開始してください。
-            </p>
-          </div>
-        )}
 
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">工事内容入力</h2>
-          <p className="text-sm text-gray-600 mb-6">
+        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-8 mb-6">
+          <h2 className="text-xl font-semibold text-stone-800 mb-4">工事内容入力</h2>
+          <p className="text-sm text-stone-600 mb-6">
             この工事種別は標準単価方式ではなく、実際の工事金額を直接入力します
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-6">
               {fields.map((field, index) => (
-                <div key={field.id} className="border border-gray-200 rounded-lg p-4 relative">
+                <div key={field.id} className="border-2 border-stone-200 rounded-2xl p-5 relative hover:border-amber-200 transition-colors">
                   {fields.length > 1 && (
                     <button
                       type="button"
                       onClick={() => remove(index)}
-                      className="absolute top-2 right-2 text-red-600 hover:text-red-800 text-sm"
+                      className="absolute top-2 right-2 text-red-500 hover:text-red-700 text-sm font-medium"
                     >
                       削除
                     </button>
                   )}
 
-                  <h3 className="font-medium mb-4">工事 #{index + 1}</h3>
+                  <h3 className="font-medium text-stone-800 mb-4">工事 #{index + 1}</h3>
 
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-semibold text-stone-700 mb-2">
                       工事カテゴリ *
                     </label>
                     <select
                       {...register(`works.${index}.categoryCode`)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 h-12 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:outline-none transition-colors text-sm"
                     >
                       <option value="">選択してください</option>
                       {OTHER_RENOVATION_CATEGORIES.map((category) => (
@@ -202,13 +205,13 @@ function OtherRenovationContent() {
                   </div>
 
                   {watch(`works.${index}.categoryCode`) && (
-                    <div className="mb-4 p-3 bg-blue-50 rounded-md">
+                    <div className="mb-4 bg-gradient-to-br from-amber-50 to-stone-50 rounded-2xl p-4 border border-amber-100">
                       {(() => {
                         const selectedCategory = OTHER_RENOVATION_CATEGORIES.find(
                           (cat) => cat.code === watch(`works.${index}.categoryCode`)
                         );
                         return selectedCategory ? (
-                          <div className="text-sm text-blue-800">
+                          <div className="text-sm text-stone-700">
                             <p><strong>説明:</strong> {selectedCategory.description}</p>
                           </div>
                         ) : null;
@@ -217,12 +220,12 @@ function OtherRenovationContent() {
                   )}
 
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-semibold text-stone-700 mb-2">
                       工事の説明 *
                     </label>
                     <textarea
                       {...register(`works.${index}.workDescription`)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:outline-none transition-colors text-sm"
                       placeholder="例: 外壁の全面改修工事"
                       rows={3}
                     />
@@ -233,14 +236,14 @@ function OtherRenovationContent() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-stone-700 mb-2">
                         工事金額 (円) *
                       </label>
                       <input
                         type="number"
                         step="1"
                         {...register(`works.${index}.amount`, { valueAsNumber: true })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 h-12 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:outline-none transition-colors text-sm"
                         placeholder="例: 1000000"
                       />
                       {errors.works?.[index]?.amount && (
@@ -249,17 +252,17 @@ function OtherRenovationContent() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-semibold text-stone-700 mb-2">
                         居住用部分の割合 (%) ※該当する場合のみ
                       </label>
                       <input
                         type="number"
                         step="0.01"
                         {...register(`works.${index}.residentRatio`, { valueAsNumber: true })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 h-12 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:outline-none transition-colors text-sm"
                         placeholder="例: 80 (空欄可)"
                       />
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-1 text-xs text-stone-500">
                         改修部分のうち、居住用以外の用途に供する部分がある場合に入力
                       </p>
                       {errors.works?.[index]?.residentRatio && (
@@ -273,20 +276,19 @@ function OtherRenovationContent() {
               <button
                 type="button"
                 onClick={() => append({ categoryCode: '', workDescription: '', amount: 0, residentRatio: undefined })}
-                className="w-full py-2 px-4 border-2 border-dashed border-gray-300 rounded-md text-gray-600
-                           hover:border-blue-500 hover:text-blue-600 transition-colors"
+                className="w-full py-3 px-4 border-2 border-dashed border-stone-300 rounded-2xl text-stone-600 hover:border-amber-400 hover:text-amber-700 hover:bg-amber-50/50 transition-colors font-medium"
               >
                 + 工事を追加
               </button>
             </div>
 
             <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">補助金額 (円)</label>
+              <label className="block text-sm font-semibold text-stone-700 mb-2">補助金額 (円)</label>
               <input
                 type="number"
                 step="1"
                 {...register('subsidyAmount', { valueAsNumber: true })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 h-12 rounded-2xl border-2 border-stone-200 focus:border-amber-500 focus:outline-none transition-colors text-sm"
                 placeholder="例: 100000"
               />
               {errors.subsidyAmount && (
@@ -298,12 +300,11 @@ function OtherRenovationContent() {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="w-full bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700
-                           disabled:bg-gray-400 disabled:cursor-not-allowed font-medium transition-colors"
+                className="w-full bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white shadow-xl shadow-amber-900/20 transition-all h-14 rounded-full text-base font-semibold hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                {isSaving ? '保存中...' : '工事データを保存'}
+                {isSaving ? '保存中...' : certificateId ? '工事データを保存' : '計算結果を反映'}
               </button>
-              <p className="text-sm text-gray-600 text-center mt-2">
+              <p className="text-xs text-stone-500 text-center mt-2">
                 保存すると証明書に工事データが紐付けられます
               </p>
             </div>

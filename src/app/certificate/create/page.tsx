@@ -698,6 +698,60 @@ export default function CertificateCreatePage() {
     }
   }, []);
 
+  // 計算ページからの結果をlocalStorageから取り込む
+  // ※ isInitialized が true になるまで実行しない（初期化中に実行すると
+  //    localStorage のキーを消費した後、初期化完了時に formData が上書きされてしまう）
+  const applyCalcResults = useCallback(() => {
+    if (!isInitialized) return;
+
+    const lsKeyMap: Record<string, 'seismic' | 'barrierFree' | 'energySaving' | 'cohabitation' | 'childcare' | 'otherRenovation'> = {
+      calc_result_seismic: 'seismic',
+      calc_result_barrierFree: 'barrierFree',
+      calc_result_energySaving: 'energySaving',
+      calc_result_cohabitation: 'cohabitation',
+      calc_result_childcare: 'childcare',
+      calc_result_otherRenovation: 'otherRenovation',
+    };
+
+    let updated = false;
+
+    setFormData(prev => {
+      const costUpdates: Partial<ReformTaxCostForm> = {};
+
+      for (const [lsKey, category] of Object.entries(lsKeyMap)) {
+        const val = localStorage.getItem(lsKey);
+        if (val !== null) {
+          const amount = parseInt(val) || 0;
+          (costUpdates as Record<string, unknown>)[category] = {
+            ...prev.reformTaxCost[category as keyof ReformTaxCostForm],
+            totalAmount: amount,
+          };
+          localStorage.removeItem(lsKey);
+          updated = true;
+        }
+      }
+
+      // longTermHousing → longTermOr.durabilityTotalAmount に反映
+      const lthVal = localStorage.getItem('calc_result_longTermHousing');
+      if (lthVal !== null) {
+        const amount = parseInt(lthVal) || 0;
+        costUpdates.longTermOr = { ...prev.reformTaxCost.longTermOr, durabilityTotalAmount: amount };
+        localStorage.removeItem('calc_result_longTermHousing');
+        updated = true;
+      }
+
+      if (!updated) return prev;
+      return { ...prev, reformTaxCost: { ...prev.reformTaxCost, ...costUpdates } };
+    });
+  }, [isInitialized]);
+
+  // ページ表示時・フォーカス復帰時に計算結果を取り込む
+  useEffect(() => {
+    applyCalcResults();
+    window.addEventListener('focus', applyCalcResults);
+    return () => window.removeEventListener('focus', applyCalcResults);
+  }, [applyCalcResults]);
+
   const steps = [
     { number: 1, title: '基本情報', description: '申請者・物件情報' },
     { number: 2, title: '(1) 工事種別', description: '実施した工事の種別' },
@@ -874,7 +928,9 @@ export default function CertificateCreatePage() {
         const esCost = buildCost(rc.energySaving, energyLimit, true);
         const cohabCost = buildCost(rc.cohabitation, 2_500_000, true);
         const ccCost = buildCost(rc.childcare, 2_500_000, true);
-        // ⑳は公式様式では第1号～第6号工事費用（将来実装）
+        // ⑳ その他増改築等（第1号～第6号工事）
+        const orSub = rc.otherRenovation.hasSubsidy ? rc.otherRenovation.subsidyAmount : 0;
+        const orAfterSub = Math.max(0, rc.otherRenovation.totalAmount - orSub);
 
         // ⑤ compound (OR)
         const lt5 = rc.longTermOr;
@@ -943,6 +999,11 @@ export default function CertificateCreatePage() {
             maxDeduction: lt6Sa, excessAmount: lt6Shi, isExcellentHousing: true,
           } : undefined,
           childcare: rc.childcare.totalAmount > 0 ? ccCost : undefined,
+          otherRenovation: rc.otherRenovation.totalAmount > 0 ? {
+            totalAmount: rc.otherRenovation.totalAmount,
+            subsidyAmount: orSub,
+            deductibleAmount: orAfterSub,
+          } : undefined,
           workDescription: formData.workDescriptions['_all'] || '',
         };
 
@@ -996,22 +1057,22 @@ export default function CertificateCreatePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-stone-50 via-amber-50/30 to-orange-50/30 py-8">
       <div className="max-w-4xl mx-auto px-4">
         {/* ヘッダー */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent">
               増改築等工事証明書 作成
             </h1>
             <div className="flex gap-3">
               <button
                 onClick={handleNewForm}
-                className="px-3 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-sm text-stone-700 bg-stone-200 rounded-full hover:bg-stone-300 transition-colors"
               >
                 クリア
               </button>
-              <Link href="/" className="px-3 py-2 text-sm text-blue-600 hover:text-blue-800">
+              <Link href="/" className="px-4 py-2 text-sm text-amber-700 hover:text-amber-800 font-semibold">
                 トップに戻る
               </Link>
             </div>
@@ -1019,7 +1080,7 @@ export default function CertificateCreatePage() {
         </div>
 
         {/* ステップインジケーター */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 mb-6">
           <div className="flex items-center justify-between">
             {steps.map((step, index) => (
               <div key={step.number} className="flex items-center flex-1">
@@ -1028,17 +1089,17 @@ export default function CertificateCreatePage() {
                   onClick={() => goToStep(step.number as WizardStep)}
                   className={`flex flex-col items-center ${currentStep >= step.number ? 'opacity-100' : 'opacity-40'}`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
-                    currentStep === step.number ? 'bg-blue-600 text-white'
-                    : currentStep > step.number ? 'bg-green-500 text-white'
-                    : 'bg-gray-200 text-gray-500'
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all ${
+                    currentStep === step.number ? 'bg-gradient-to-r from-amber-700 to-stone-700 text-white shadow-lg shadow-amber-900/20'
+                    : currentStep > step.number ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white'
+                    : 'bg-stone-200 text-stone-500'
                   }`}>
                     {currentStep > step.number ? '✓' : step.number}
                   </div>
                   <p className="mt-1 text-xs font-medium">{step.title}</p>
                 </button>
                 {index < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-3 ${currentStep > step.number ? 'bg-green-500' : 'bg-gray-200'}`} />
+                  <div className={`flex-1 h-0.5 mx-3 ${currentStep > step.number ? 'bg-emerald-500' : 'bg-stone-200'}`} />
                 )}
               </div>
             ))}
@@ -1046,106 +1107,106 @@ export default function CertificateCreatePage() {
         </div>
 
         {/* コンテンツ */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-6">
           {/* ステップ1: 基本情報 */}
           {currentStep === 1 && (
             <div>
               <h2 className="text-xl font-bold mb-4">基本情報</h2>
 
               {wasRestored && (
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
+                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-2xl text-sm text-emerald-800">
                   前回入力したデータが復元されました。続きから入力できます。
                 </div>
               )}
 
               <div className="space-y-6">
                 {/* 申請者情報 */}
-                <div className="border-b pb-6">
+                <div className="border-b border-stone-200 pb-6">
                   <h3 className="text-lg font-semibold mb-3">申請者情報</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">氏名 *</label>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">氏名 *</label>
                       <input type="text" value={formData.applicantName}
                         onChange={(e) => setFormData({ ...formData, applicantName: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="山田 太郎" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">郵便番号</label>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">郵便番号</label>
                       <input type="text" value={formData.applicantPostalCode}
                         onChange={(e) => {
                           const value = e.target.value;
                           setFormData(prev => ({ ...prev, applicantPostalCode: value }));
                           if (value.replace(/-/g, '').length === 7) fetchAddressFromPostalCode(value, 'applicant');
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="1000001" maxLength={8} />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">住所 *</label>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">住所 *</label>
                       <input type="text" value={formData.applicantAddress}
                         onChange={(e) => setFormData({ ...formData, applicantAddress: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="東京都千代田区千代田" />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">番地・建物名</label>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">番地・建物名</label>
                       <input type="text" value={formData.applicantAddressDetail}
                         onChange={(e) => setFormData({ ...formData, applicantAddressDetail: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="1-2-3 〇〇ビル 4階" />
                     </div>
                   </div>
                 </div>
 
                 {/* 家屋情報 */}
-                <div className="border-b pb-6">
+                <div className="border-b border-stone-200 pb-6">
                   <h3 className="text-lg font-semibold mb-3">家屋番号及び所在地</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">郵便番号</label>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">郵便番号</label>
                       <input type="text" value={formData.propertyPostalCode}
                         onChange={(e) => {
                           const value = e.target.value;
                           setFormData(prev => ({ ...prev, propertyPostalCode: value }));
                           if (value.replace(/-/g, '').length === 7) fetchAddressFromPostalCode(value, 'property');
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="1000001" maxLength={8} />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">所在地 *</label>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">所在地 *</label>
                       <input type="text" value={formData.propertyAddress}
                         onChange={(e) => setFormData({ ...formData, propertyAddress: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="東京都千代田区千代田 1-2-3" />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">家屋番号</label>
+                      <label className="block text-sm font-medium text-stone-700 mb-1">家屋番号</label>
                       <input type="text" value={formData.propertyNumber}
                         onChange={(e) => setFormData({ ...formData, propertyNumber: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="12番地3" />
                     </div>
                   </div>
                 </div>
 
                 {/* 用途区分（工事種別の前に配置） */}
-                <div className="border-b pb-6">
+                <div className="border-b border-stone-200 pb-6">
                   <h3 className="text-lg font-semibold mb-3">証明書の用途 *</h3>
-                  <p className="text-sm text-gray-600 mb-4">証明する工事の内容に該当するものを選択してください。</p>
+                  <p className="text-sm text-stone-600 mb-4">証明する工事の内容に該当するものを選択してください。</p>
 
                   {/* Ⅰ．所得税額の特別控除 */}
                   <div className="mb-4">
-                    <div className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded mb-2 inline-block">Ⅰ．所得税額の特別控除</div>
+                    <div className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-full mb-2 inline-block">Ⅰ．所得税額の特別控除</div>
                     <div className="space-y-2">
                       {[
                         { value: 'housing_loan', label: '住宅ローン減税（増改築）をした場合', sub: '（住宅借入金等特別税額控除）', page: '様式 1ページ' },
                         { value: 'reform_tax', label: 'リフォーム促進税制＞省エネ改修・子育て対応改修をした場合＞耐震改修・その他増改築をした場合', sub: '（住宅耐震改修特別税額控除又は住宅特定改修特別税額控除）', page: '様式 9ページ' },
                         { value: 'resale', label: '買取再販住宅の要件を満たす工事', sub: '（買取再販住宅の取得に係る住宅借入金等特別税額控除）', page: '様式 17ページ' },
                       ].map((purpose) => (
-                        <label key={purpose.value} className={`flex items-start p-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                          formData.purposeType === purpose.value ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
+                        <label key={purpose.value} className={`flex items-start p-3 border-2 rounded-2xl cursor-pointer transition-colors ${
+                          formData.purposeType === purpose.value ? 'border-amber-500 bg-amber-50' : 'border-stone-200 hover:border-amber-300'
                         }`}>
                           <input type="radio" name="purposeType" value={purpose.value}
                             checked={formData.purposeType === purpose.value}
@@ -1155,8 +1216,8 @@ export default function CertificateCreatePage() {
                             className="mt-1 mr-3 shrink-0" />
                           <div>
                             <p className="font-medium text-sm">{purpose.label}</p>
-                            {purpose.sub && <p className="text-xs text-gray-500 mt-0.5">{purpose.sub}</p>}
-                            <p className="text-xs text-gray-400 mt-0.5">{purpose.page}</p>
+                            {purpose.sub && <p className="text-xs text-stone-500 mt-0.5">{purpose.sub}</p>}
+                            <p className="text-xs text-stone-400 mt-0.5">{purpose.page}</p>
                           </div>
                         </label>
                       ))}
@@ -1165,13 +1226,13 @@ export default function CertificateCreatePage() {
 
                   {/* Ⅱ．固定資産税の減額 */}
                   <div>
-                    <div className="text-xs font-bold text-green-700 bg-green-50 px-2 py-1 rounded mb-2 inline-block">Ⅱ．固定資産税の減額</div>
+                    <div className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full mb-2 inline-block">Ⅱ．固定資産税の減額</div>
                     <div className="space-y-2">
                       {[
                         { value: 'property_tax', label: '固定資産税減額に資する耐震・省エネ・長期優良住宅化リフォーム', page: '様式 20ページ' },
                       ].map((purpose) => (
-                        <label key={purpose.value} className={`flex items-start p-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                          formData.purposeType === purpose.value ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-green-300'
+                        <label key={purpose.value} className={`flex items-start p-3 border-2 rounded-2xl cursor-pointer transition-colors ${
+                          formData.purposeType === purpose.value ? 'border-emerald-500 bg-emerald-50' : 'border-stone-200 hover:border-emerald-300'
                         }`}>
                           <input type="radio" name="purposeType" value={purpose.value}
                             checked={formData.purposeType === purpose.value}
@@ -1181,7 +1242,7 @@ export default function CertificateCreatePage() {
                             className="mt-1 mr-3 shrink-0" />
                           <div>
                             <p className="font-medium text-sm">{purpose.label}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{purpose.page}</p>
+                            <p className="text-xs text-stone-400 mt-0.5">{purpose.page}</p>
                           </div>
                         </label>
                       ))}
@@ -1190,13 +1251,13 @@ export default function CertificateCreatePage() {
                 </div>
 
                 {/* 工事情報 */}
-                <div className="border-b pb-6">
+                <div className="border-b border-stone-200 pb-6">
                   <h3 className="text-lg font-semibold mb-3">工事情報</h3>
                   <div className="max-w-md">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">工事完了年月日 *</label>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">工事完了年月日 *</label>
                     <input type="date" value={formData.completionDate}
                       onChange={(e) => setFormData({ ...formData, completionDate: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+                      className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors" />
                   </div>
                 </div>
               </div>
@@ -1207,15 +1268,15 @@ export default function CertificateCreatePage() {
           {currentStep === 2 && (
             <div>
               {formData.purposeType && PURPOSE_SECTION_INFO[formData.purposeType as PurposeType] && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs font-semibold text-blue-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
-                  <p className="text-sm font-bold text-blue-900 mt-1">
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                  <p className="text-xs font-semibold text-amber-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
+                  <p className="text-sm font-bold text-amber-900 mt-1">
                     {PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].sectionNumber}．{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].title}
                   </p>
                 </div>
               )}
               <h2 className="text-xl font-bold mb-2">（１）実施した工事の種別</h2>
-              <p className="text-sm text-gray-600 mb-6">
+              <p className="text-sm text-stone-600 mb-6">
                 公式様式に準拠した工事種別の詳細項目を選択してください。
               </p>
 
@@ -1223,12 +1284,12 @@ export default function CertificateCreatePage() {
               {formData.purposeType === 'property_tax' && (
                 <div className="space-y-6">
                   {/* 1-1: 耐震改修 */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
+                  <div className="p-4 border border-stone-200 rounded-2xl">
                     <h3 className="font-bold text-sm mb-1">１－１．耐震改修をした場合</h3>
-                    <p className="text-xs text-gray-500 mb-3">地方税法施行令附則第12条第19項に規定する基準に適合する耐震改修</p>
+                    <p className="text-xs text-stone-500 mb-3">地方税法施行令附則第12条第19項に規定する基準に適合する耐震改修</p>
 
                     <div className="mb-4">
-                      <p className="text-xs font-medium text-gray-700 mb-2">工事の種別</p>
+                      <p className="text-xs font-medium text-stone-700 mb-2">工事の種別</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {([
                           ['extension', '1 増築'],
@@ -1246,7 +1307,7 @@ export default function CertificateCreatePage() {
                                   seismicWorkTypes: { ...prev.propertyTaxForm.seismicWorkTypes, [key]: e.target.checked },
                                 },
                               }))}
-                              className="w-4 h-4 text-blue-600 rounded" />
+                              className="w-4 h-4 text-amber-600 rounded" />
                             <span>{label}</span>
                           </label>
                         ))}
@@ -1254,7 +1315,7 @@ export default function CertificateCreatePage() {
                     </div>
 
                     <div className="mb-4">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">工事の内容</label>
+                      <label className="block text-xs font-medium text-stone-700 mb-1">工事の内容</label>
                       <textarea
                         value={formData.propertyTaxForm.seismicWorkDescription}
                         onChange={(e) => setFormData(prev => ({
@@ -1262,39 +1323,39 @@ export default function CertificateCreatePage() {
                           propertyTaxForm: { ...prev.propertyTaxForm, seismicWorkDescription: e.target.value },
                         }))}
                         rows={2}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="耐震改修工事の内容を記入..."
                       />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">全体の工事費用（税込）</label>
+                        <label className="block text-xs font-medium text-stone-700 mb-1">全体の工事費用（税込）</label>
                         <input type="number"
                           value={formData.propertyTaxForm.seismicTotalCost || ''}
                           onChange={(e) => setFormData(prev => ({
                             ...prev,
                             propertyTaxForm: { ...prev.propertyTaxForm, seismicTotalCost: Number(e.target.value) || 0 },
                           }))}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                           placeholder="0" />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">うち耐震改修の工事費用（税込）</label>
+                        <label className="block text-xs font-medium text-stone-700 mb-1">うち耐震改修の工事費用（税込）</label>
                         <input type="number"
                           value={formData.propertyTaxForm.seismicCost || ''}
                           onChange={(e) => setFormData(prev => ({
                             ...prev,
                             propertyTaxForm: { ...prev.propertyTaxForm, seismicCost: Number(e.target.value) || 0 },
                           }))}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                           placeholder="0" />
                       </div>
                     </div>
                   </div>
 
                   {/* 1-2: 耐震改修→認定長期優良住宅 */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
+                  <div className="p-4 border border-stone-200 rounded-2xl">
                     <div className="flex items-center space-x-2 mb-3">
                       <input type="checkbox"
                         checked={formData.propertyTaxForm.seismicLongTermEnabled}
@@ -1302,58 +1363,58 @@ export default function CertificateCreatePage() {
                           ...prev,
                           propertyTaxForm: { ...prev.propertyTaxForm, seismicLongTermEnabled: e.target.checked },
                         }))}
-                        className="w-4 h-4 text-blue-600 rounded" />
+                        className="w-4 h-4 text-amber-600 rounded" />
                       <div>
                         <h3 className="font-bold text-sm">１－２．耐震改修をした家屋が認定長期優良住宅に該当することとなった場合</h3>
-                        <p className="text-xs text-gray-500">地方税法附則第15条の９の２第１項に規定する耐震改修</p>
+                        <p className="text-xs text-stone-500">地方税法附則第15条の９の２第１項に規定する耐震改修</p>
                       </div>
                     </div>
 
                     {formData.propertyTaxForm.seismicLongTermEnabled && (
                       <div className="ml-6 space-y-3">
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">認定主体</label>
+                          <label className="block text-xs font-medium text-stone-700 mb-1">認定主体</label>
                           <input type="text"
                             value={formData.propertyTaxForm.seismicLtCertAuthority}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
                               propertyTaxForm: { ...prev.propertyTaxForm, seismicLtCertAuthority: e.target.value },
                             }))}
-                            className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full max-w-md px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                             placeholder="○○市長" />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">認定番号</label>
+                          <label className="block text-xs font-medium text-stone-700 mb-1">認定番号</label>
                           <input type="text"
                             value={formData.propertyTaxForm.seismicLtCertNumber}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
                               propertyTaxForm: { ...prev.propertyTaxForm, seismicLtCertNumber: e.target.value },
                             }))}
-                            className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full max-w-md px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                             placeholder="第○○号" />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">認定年月日</label>
+                          <label className="block text-xs font-medium text-stone-700 mb-1">認定年月日</label>
                           <input type="date"
                             value={formData.propertyTaxForm.seismicLtCertDate}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
                               propertyTaxForm: { ...prev.propertyTaxForm, seismicLtCertDate: e.target.value },
                             }))}
-                            className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+                            className="w-full max-w-md px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors" />
                         </div>
                       </div>
                     )}
                   </div>
 
                   {/* 2: 熱損失防止改修工事等（省エネ） */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
+                  <div className="p-4 border border-stone-200 rounded-2xl">
                     <h3 className="font-bold text-sm mb-1">２．熱損失防止改修工事等をした場合</h3>
-                    <p className="text-xs text-gray-500 mb-3">熱損失防止改修工事等をした場合又は熱損失防止改修工事等をした家屋が認定長期優良住宅に該当することとなった場合</p>
+                    <p className="text-xs text-stone-500 mb-3">熱損失防止改修工事等をした場合又は熱損失防止改修工事等をした家屋が認定長期優良住宅に該当することとなった場合</p>
 
                     <div className="mb-4">
-                      <p className="text-xs font-medium text-gray-700 mb-2">工事の種別（窓の断熱性を高める工事と併せて行う以下の工事）</p>
+                      <p className="text-xs font-medium text-stone-700 mb-2">工事の種別（窓の断熱性を高める工事と併せて行う以下の工事）</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {([
                           ['ceilingInsulation', '1 天井等の断熱性を高める工事'],
@@ -1376,7 +1437,7 @@ export default function CertificateCreatePage() {
                                   energyTypes: { ...prev.propertyTaxForm.energyTypes, [key]: e.target.checked },
                                 },
                               }))}
-                              className="w-4 h-4 text-blue-600 rounded" />
+                              className="w-4 h-4 text-amber-600 rounded" />
                             <span>{label}</span>
                           </label>
                         ))}
@@ -1384,7 +1445,7 @@ export default function CertificateCreatePage() {
                     </div>
 
                     <div className="mb-4">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">工事の内容</label>
+                      <label className="block text-xs font-medium text-stone-700 mb-1">工事の内容</label>
                       <textarea
                         value={formData.propertyTaxForm.energyWorkDescription}
                         onChange={(e) => setFormData(prev => ({
@@ -1392,42 +1453,42 @@ export default function CertificateCreatePage() {
                           propertyTaxForm: { ...prev.propertyTaxForm, energyWorkDescription: e.target.value },
                         }))}
                         rows={2}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="省エネ改修工事の内容を記入..."
                       />
                     </div>
 
                     {/* 費用の額 */}
-                    <div className="bg-gray-50 p-3 rounded-md space-y-3">
-                      <p className="text-xs font-semibold text-gray-700">費用の額</p>
+                    <div className="bg-stone-50 p-3 rounded-2xl space-y-3">
+                      <p className="text-xs font-semibold text-stone-700">費用の額</p>
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">全体の工事費用（税込）</label>
+                        <label className="block text-xs text-stone-600 mb-1">全体の工事費用（税込）</label>
                         <input type="number"
                           value={formData.propertyTaxForm.energyTotalCost || ''}
                           onChange={(e) => setFormData(prev => ({
                             ...prev,
                             propertyTaxForm: { ...prev.propertyTaxForm, energyTotalCost: Number(e.target.value) || 0 },
                           }))}
-                          className="w-full max-w-xs px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full max-w-xs px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                           placeholder="0" />
                       </div>
 
                       <div className="border-t pt-3">
-                        <p className="text-xs font-medium text-gray-600 mb-2">断熱改修工事</p>
+                        <p className="text-xs font-medium text-stone-600 mb-2">断熱改修工事</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">ア 断熱改修工事の費用</label>
+                            <label className="block text-xs text-stone-600 mb-1">ア 断熱改修工事の費用</label>
                             <input type="number"
                               value={formData.propertyTaxForm.energyInsulationCost || ''}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 propertyTaxForm: { ...prev.propertyTaxForm, energyInsulationCost: Number(e.target.value) || 0 },
                               }))}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                              className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                               placeholder="0" />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">イ 補助金等の有無</label>
+                            <label className="block text-xs text-stone-600 mb-1">イ 補助金等の有無</label>
                             <div className="flex gap-4 mt-1">
                               <label className="flex items-center space-x-1 text-sm">
                                 <input type="radio" name="insulationSubsidy"
@@ -1436,7 +1497,7 @@ export default function CertificateCreatePage() {
                                     ...prev,
                                     propertyTaxForm: { ...prev.propertyTaxForm, energyInsulationHasSubsidy: true },
                                   }))}
-                                  className="w-4 h-4 text-blue-600" />
+                                  className="w-4 h-4 text-amber-600" />
                                 <span>有</span>
                               </label>
                               <label className="flex items-center space-x-1 text-sm">
@@ -1446,7 +1507,7 @@ export default function CertificateCreatePage() {
                                     ...prev,
                                     propertyTaxForm: { ...prev.propertyTaxForm, energyInsulationHasSubsidy: false, energyInsulationSubsidy: 0 },
                                   }))}
-                                  className="w-4 h-4 text-blue-600" />
+                                  className="w-4 h-4 text-amber-600" />
                                 <span>無</span>
                               </label>
                             </div>
@@ -1454,19 +1515,19 @@ export default function CertificateCreatePage() {
                         </div>
                         {formData.propertyTaxForm.energyInsulationHasSubsidy && (
                           <div className="mt-2">
-                            <label className="block text-xs text-gray-600 mb-1">ウ 補助金等の額</label>
+                            <label className="block text-xs text-stone-600 mb-1">ウ 補助金等の額</label>
                             <input type="number"
                               value={formData.propertyTaxForm.energyInsulationSubsidy || ''}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 propertyTaxForm: { ...prev.propertyTaxForm, energyInsulationSubsidy: Number(e.target.value) || 0 },
                               }))}
-                              className="w-full max-w-xs px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                              className="w-full max-w-xs px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                               placeholder="0" />
                           </div>
                         )}
                         {/* ① 差引額（自動計算） */}
-                        <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                        <div className="mt-2 p-2 bg-amber-50 rounded-2xl text-sm">
                           ① 差引額: <span className="font-bold">
                             {(formData.propertyTaxForm.energyInsulationCost - (formData.propertyTaxForm.energyInsulationHasSubsidy ? formData.propertyTaxForm.energyInsulationSubsidy : 0)).toLocaleString()}円
                           </span>
@@ -1474,21 +1535,21 @@ export default function CertificateCreatePage() {
                       </div>
 
                       <div className="border-t pt-3">
-                        <p className="text-xs font-medium text-gray-600 mb-2">設備工事</p>
+                        <p className="text-xs font-medium text-stone-600 mb-2">設備工事</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">エ 設備工事の費用</label>
+                            <label className="block text-xs text-stone-600 mb-1">エ 設備工事の費用</label>
                             <input type="number"
                               value={formData.propertyTaxForm.energyEquipmentCost || ''}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 propertyTaxForm: { ...prev.propertyTaxForm, energyEquipmentCost: Number(e.target.value) || 0 },
                               }))}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                              className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                               placeholder="0" />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">オ 補助金等の有無</label>
+                            <label className="block text-xs text-stone-600 mb-1">オ 補助金等の有無</label>
                             <div className="flex gap-4 mt-1">
                               <label className="flex items-center space-x-1 text-sm">
                                 <input type="radio" name="equipmentSubsidy"
@@ -1497,7 +1558,7 @@ export default function CertificateCreatePage() {
                                     ...prev,
                                     propertyTaxForm: { ...prev.propertyTaxForm, energyEquipmentHasSubsidy: true },
                                   }))}
-                                  className="w-4 h-4 text-blue-600" />
+                                  className="w-4 h-4 text-amber-600" />
                                 <span>有</span>
                               </label>
                               <label className="flex items-center space-x-1 text-sm">
@@ -1507,7 +1568,7 @@ export default function CertificateCreatePage() {
                                     ...prev,
                                     propertyTaxForm: { ...prev.propertyTaxForm, energyEquipmentHasSubsidy: false, energyEquipmentSubsidy: 0 },
                                   }))}
-                                  className="w-4 h-4 text-blue-600" />
+                                  className="w-4 h-4 text-amber-600" />
                                 <span>無</span>
                               </label>
                             </div>
@@ -1515,19 +1576,19 @@ export default function CertificateCreatePage() {
                         </div>
                         {formData.propertyTaxForm.energyEquipmentHasSubsidy && (
                           <div className="mt-2">
-                            <label className="block text-xs text-gray-600 mb-1">カ 補助金等の額</label>
+                            <label className="block text-xs text-stone-600 mb-1">カ 補助金等の額</label>
                             <input type="number"
                               value={formData.propertyTaxForm.energyEquipmentSubsidy || ''}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 propertyTaxForm: { ...prev.propertyTaxForm, energyEquipmentSubsidy: Number(e.target.value) || 0 },
                               }))}
-                              className="w-full max-w-xs px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                              className="w-full max-w-xs px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                               placeholder="0" />
                           </div>
                         )}
                         {/* ② 設備差引額（自動計算） */}
-                        <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                        <div className="mt-2 p-2 bg-amber-50 rounded-2xl text-sm">
                           ② 設備差引額: <span className="font-bold">
                             {(formData.propertyTaxForm.energyEquipmentCost - (formData.propertyTaxForm.energyEquipmentHasSubsidy ? formData.propertyTaxForm.energyEquipmentSubsidy : 0)).toLocaleString()}円
                           </span>
@@ -1542,10 +1603,10 @@ export default function CertificateCreatePage() {
                         const check4 = d1 > 500000 && (d1 + d2) > 600000;
                         return (
                           <div className="border-t pt-3 space-y-1">
-                            <div className={`text-sm p-2 rounded ${check3 ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
+                            <div className={`text-sm p-2 rounded-2xl ${check3 ? 'bg-emerald-50 text-emerald-800' : 'bg-stone-100 text-stone-500'}`}>
                               ③ ①が60万円超: <span className="font-bold">{check3 ? '該当' : '非該当'}</span>
                             </div>
-                            <div className={`text-sm p-2 rounded ${check4 ? 'bg-green-50 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
+                            <div className={`text-sm p-2 rounded-2xl ${check4 ? 'bg-emerald-50 text-emerald-800' : 'bg-stone-100 text-stone-500'}`}>
                               ④ ①が50万円超かつ①＋②が60万円超: <span className="font-bold">{check4 ? '該当' : '非該当'}</span>
                             </div>
                           </div>
@@ -1554,7 +1615,7 @@ export default function CertificateCreatePage() {
                     </div>
 
                     {/* 認定長期優良住宅（省エネpath） */}
-                    <div className="mt-4 p-3 border border-dashed border-gray-300 rounded-md">
+                    <div className="mt-4 p-3 border border-dashed border-stone-300 rounded-2xl">
                       <label className="flex items-center space-x-2">
                         <input type="checkbox"
                           checked={formData.propertyTaxForm.energyLongTermEnabled}
@@ -1562,42 +1623,42 @@ export default function CertificateCreatePage() {
                             ...prev,
                             propertyTaxForm: { ...prev.propertyTaxForm, energyLongTermEnabled: e.target.checked },
                           }))}
-                          className="w-4 h-4 text-blue-600 rounded" />
+                          className="w-4 h-4 text-amber-600 rounded" />
                         <span className="text-sm font-medium">認定長期優良住宅に該当する場合</span>
                       </label>
                       {formData.propertyTaxForm.energyLongTermEnabled && (
                         <div className="ml-6 mt-3 space-y-3">
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">認定主体</label>
+                            <label className="block text-xs font-medium text-stone-700 mb-1">認定主体</label>
                             <input type="text"
                               value={formData.propertyTaxForm.energyLtCertAuthority}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 propertyTaxForm: { ...prev.propertyTaxForm, energyLtCertAuthority: e.target.value },
                               }))}
-                              className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                              className="w-full max-w-md px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                               placeholder="○○市長" />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">認定番号</label>
+                            <label className="block text-xs font-medium text-stone-700 mb-1">認定番号</label>
                             <input type="text"
                               value={formData.propertyTaxForm.energyLtCertNumber}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 propertyTaxForm: { ...prev.propertyTaxForm, energyLtCertNumber: e.target.value },
                               }))}
-                              className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                              className="w-full max-w-md px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                               placeholder="第○○号" />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">認定年月日</label>
+                            <label className="block text-xs font-medium text-stone-700 mb-1">認定年月日</label>
                             <input type="date"
                               value={formData.propertyTaxForm.energyLtCertDate}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
                                 propertyTaxForm: { ...prev.propertyTaxForm, energyLtCertDate: e.target.value },
                               }))}
-                              className="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+                              className="w-full max-w-md px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors" />
                           </div>
                         </div>
                       )}
@@ -1610,7 +1671,7 @@ export default function CertificateCreatePage() {
               {formData.purposeType === 'reform_tax' && (
                 <div className="space-y-5">
                   {/* ① 耐震改修 */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
+                  <div className="p-4 border border-stone-200 rounded-2xl">
                     <h3 className="font-bold text-sm mb-3">① 住宅耐震改修</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {([
@@ -1618,7 +1679,7 @@ export default function CertificateCreatePage() {
                         ['earthquakeSafety', '地震に対する安全性に係る基準に適合させるもの'],
                       ] as const).map(([key, label]) => (
                         <label key={key} className="flex items-start space-x-2 text-sm">
-                          <input type="checkbox" className="w-4 h-4 mt-0.5 text-blue-600 rounded"
+                          <input type="checkbox" className="w-4 h-4 mt-0.5 text-amber-600 rounded"
                             checked={formData.reformTaxWorkTypes.seismic[key]}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
@@ -1634,7 +1695,7 @@ export default function CertificateCreatePage() {
                   </div>
 
                   {/* ② バリアフリー改修 */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
+                  <div className="p-4 border border-stone-200 rounded-2xl">
                     <h3 className="font-bold text-sm mb-3">② 高齢者等居住改修工事等（バリアフリー改修工事）</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {([
@@ -1648,7 +1709,7 @@ export default function CertificateCreatePage() {
                         ['floorSlipPrevention', '8 床材の取替'],
                       ] as const).map(([key, label]) => (
                         <label key={key} className="flex items-center space-x-2 text-sm">
-                          <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                          <input type="checkbox" className="w-4 h-4 text-amber-600 rounded"
                             checked={formData.reformTaxWorkTypes.barrierFree[key]}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
@@ -1664,21 +1725,39 @@ export default function CertificateCreatePage() {
                   </div>
 
                   {/* ③ 省エネ改修 */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <h3 className="font-bold text-sm mb-3">③ 一般断熱改修工事等（省エネ改修工事）</h3>
+                  <div className="p-4 border border-stone-200 rounded-2xl">
+                    <h3 className="font-bold text-sm mb-1">③ 一般断熱改修工事等（省エネ改修工事）</h3>
+                    <p className="text-xs text-stone-600 mb-3 ml-4">窓の断熱改修工事を実施した場合</p>
 
                     {/* A. 窓の断熱改修工事パターン */}
                     <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">A. 窓の断熱改修工事</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                      {/* 1. 窓の断熱性を高める工事 */}
+                      <p className="text-xs text-stone-700 mb-2">エネルギーの使用の合理化に資する増築、改築、修繕又は模様替</p>
+                      <div className="ml-4 mb-3">
+                        <label className="flex items-center space-x-2 text-sm">
+                          <input type="checkbox" className="w-4 h-4 text-amber-600 rounded"
+                            checked={(formData.reformTaxWorkTypes.energySaving as Record<string, boolean | string | object>).windowInsulation === true}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              reformTaxWorkTypes: {
+                                ...prev.reformTaxWorkTypes,
+                                energySaving: { ...prev.reformTaxWorkTypes.energySaving, windowInsulation: e.target.checked },
+                              },
+                            }))} />
+                          <span>１　窓の断熱性を高める工事</span>
+                        </label>
+                      </div>
+
+                      {/* 2-4. 上記１と併せて行う工事 */}
+                      <p className="text-xs text-stone-700 mb-2">上記１と併せて行う次のいずれかに該当する増築、改築、修繕又は模様替</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-4">
                         {([
-                          ['windowInsulation', '1 全ての居室の全ての窓の断熱性を高める工事'],
-                          ['ceilingInsulation', '2 天井等の断熱性を高める工事'],
-                          ['wallInsulation', '3 壁の断熱性を高める工事'],
-                          ['floorInsulation', '4 床等の断熱性を高める工事'],
+                          ['ceilingInsulation', '２　天井等の断熱性を高める工事'],
+                          ['wallInsulation', '３　壁の断熱性を高める工事'],
+                          ['floorInsulation', '４　床等の断熱性を高める工事'],
                         ] as const).map(([key, label]) => (
                           <label key={key} className="flex items-center space-x-2 text-sm">
-                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                            <input type="checkbox" className="w-4 h-4 text-amber-600 rounded"
                               checked={(formData.reformTaxWorkTypes.energySaving as Record<string, boolean | string | object>)[key] === true}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
@@ -1691,22 +1770,24 @@ export default function CertificateCreatePage() {
                           </label>
                         ))}
                       </div>
-                      <div className="mt-2 ml-2">
-                        <p className="text-xs text-gray-600 mb-1">地域区分</p>
+
+                      {/* 地域区分 */}
+                      <div className="mt-3 ml-4 flex items-center gap-3 flex-wrap">
+                        <span className="text-xs font-semibold text-stone-700 bg-stone-100 px-2 py-0.5 rounded-full shrink-0">地域区分</span>
                         <div className="flex flex-wrap gap-2">
                           {['1','2','3','4','5','6','7','8'].map(n => (
                             <label key={n} className="flex items-center space-x-1 text-sm">
-                              <input type="radio" name="energyRegionCode"
+                              <input type="checkbox"
                                 checked={formData.reformTaxWorkTypes.energySaving.regionCode === n}
-                                onChange={() => setFormData(prev => ({
+                                onChange={(e) => setFormData(prev => ({
                                   ...prev,
                                   reformTaxWorkTypes: {
                                     ...prev.reformTaxWorkTypes,
-                                    energySaving: { ...prev.reformTaxWorkTypes.energySaving, regionCode: n },
+                                    energySaving: { ...prev.reformTaxWorkTypes.energySaving, regionCode: e.target.checked ? n : '' },
                                   },
                                 }))}
-                                className="w-3 h-3 text-blue-600" />
-                              <span>{n}</span>
+                                className="w-4 h-4 text-amber-600 rounded" />
+                              <span>{n}地域</span>
                             </label>
                           ))}
                         </div>
@@ -1714,8 +1795,8 @@ export default function CertificateCreatePage() {
                     </div>
 
                     {/* B. 認定低炭素建築物パターン */}
-                    <div className="mb-4 pt-3 border-t border-gray-100">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">B. 認定低炭素建築物の新築等に係る工事</p>
+                    <div className="mb-4 pt-3 border-t border-stone-100">
+                      <p className="text-xs font-semibold text-stone-700 mb-2">B. 認定低炭素建築物の新築等に係る工事</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
                         {([
                           ['windowInsulation', '1 窓の断熱性を高める工事'],
@@ -1724,7 +1805,7 @@ export default function CertificateCreatePage() {
                           ['floorInsulation', '4 床等の断熱性を高める工事'],
                         ] as const).map(([key, label]) => (
                           <label key={key} className="flex items-center space-x-2 text-sm">
-                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                            <input type="checkbox" className="w-4 h-4 text-amber-600 rounded"
                               checked={formData.reformTaxWorkTypes.energySaving.lowCarbon[key]}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
@@ -1742,7 +1823,7 @@ export default function CertificateCreatePage() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2 ml-2">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">認定主体</label>
+                          <label className="block text-xs text-stone-600 mb-1">認定主体</label>
                           <input type="text"
                             value={formData.reformTaxWorkTypes.energySaving.lowCarbon.certAuthority}
                             onChange={(e) => setFormData(prev => ({
@@ -1755,10 +1836,10 @@ export default function CertificateCreatePage() {
                                 },
                               },
                             }))}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="○○市長" />
+                            className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" placeholder="○○市長" />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">認定番号</label>
+                          <label className="block text-xs text-stone-600 mb-1">認定番号</label>
                           <input type="text"
                             value={formData.reformTaxWorkTypes.energySaving.lowCarbon.certNumber}
                             onChange={(e) => setFormData(prev => ({
@@ -1771,10 +1852,10 @@ export default function CertificateCreatePage() {
                                 },
                               },
                             }))}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="第○○号" />
+                            className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" placeholder="第○○号" />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">認定年月日</label>
+                          <label className="block text-xs text-stone-600 mb-1">認定年月日</label>
                           <input type="date"
                             value={formData.reformTaxWorkTypes.energySaving.lowCarbon.certDate}
                             onChange={(e) => setFormData(prev => ({
@@ -1787,14 +1868,14 @@ export default function CertificateCreatePage() {
                                 },
                               },
                             }))}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                            className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" />
                         </div>
                       </div>
                     </div>
 
                     {/* C. 設備型式 */}
-                    <div className="mb-4 pt-3 border-t border-gray-100">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">C. 設備の型式</p>
+                    <div className="mb-4 pt-3 border-t border-stone-100">
+                      <p className="text-xs font-semibold text-stone-700 mb-2">C. 設備の型式</p>
                       <div className="space-y-2 ml-2">
                         {([
                           ['solarHeat', '太陽熱利用冷温熱装置'],
@@ -1806,7 +1887,7 @@ export default function CertificateCreatePage() {
                           ['solarPower', '太陽光発電設備'],
                         ] as const).map(([key, label]) => (
                           <div key={key} className="flex items-center gap-2">
-                            <label className="text-xs text-gray-600 w-48 shrink-0">{label}</label>
+                            <label className="text-xs text-stone-600 w-48 shrink-0">{label}</label>
                             <input type="text"
                               value={formData.reformTaxWorkTypes.energySaving.equipmentTypes[key]}
                               onChange={(e) => setFormData(prev => ({
@@ -1819,15 +1900,15 @@ export default function CertificateCreatePage() {
                                   },
                                 },
                               }))}
-                              className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="型式を入力" />
+                              className="flex-1 px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" placeholder="型式を入力" />
                           </div>
                         ))}
                       </div>
                     </div>
 
                     {/* D. 追加工事 */}
-                    <div className="pt-3 border-t border-gray-100">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">D. 追加工事の有無</p>
+                    <div className="pt-3 border-t border-stone-100">
+                      <p className="text-xs font-semibold text-stone-700 mb-2">D. 追加工事の有無</p>
                       <div className="space-y-2 ml-2">
                         {([
                           ['safetyWork', '安全対策工事'],
@@ -1837,7 +1918,7 @@ export default function CertificateCreatePage() {
                           ['trunkLineReinforcement', '幹線増強工事'],
                         ] as const).map(([key, label]) => (
                           <div key={key} className="flex items-center gap-3">
-                            <span className="text-xs text-gray-600 w-36 shrink-0">{label}</span>
+                            <span className="text-xs text-stone-600 w-36 shrink-0">{label}</span>
                             {['yes', 'no'].map(val => (
                               <label key={val} className="flex items-center gap-1 text-xs">
                                 <input type="radio"
@@ -1864,7 +1945,7 @@ export default function CertificateCreatePage() {
                   </div>
 
                   {/* ④ 同居対応改修 */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
+                  <div className="p-4 border border-stone-200 rounded-2xl">
                     <h3 className="font-bold text-sm mb-3">④ 多世帯同居改修工事等</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                       {([
@@ -1874,7 +1955,7 @@ export default function CertificateCreatePage() {
                         ['entrance', '4 玄関の増設'],
                       ] as const).map(([key, label]) => (
                         <label key={key} className="flex items-center space-x-2 text-sm">
-                          <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                          <input type="checkbox" className="w-4 h-4 text-amber-600 rounded"
                             checked={formData.reformTaxWorkTypes.cohabitation[key] as boolean}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
@@ -1888,12 +1969,12 @@ export default function CertificateCreatePage() {
                       ))}
                     </div>
                     {/* 改修前後の室数 */}
-                    <div className="border-t border-gray-100 pt-3">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">改修工事前後の室数</p>
+                    <div className="border-t border-stone-100 pt-3">
+                      <p className="text-xs font-semibold text-stone-700 mb-2">改修工事前後の室数</p>
                       <div className="overflow-x-auto">
                         <table className="text-xs w-full">
                           <thead>
-                            <tr className="bg-gray-50">
+                            <tr className="bg-stone-50">
                               <th className="px-2 py-1 text-left"></th>
                               <th className="px-2 py-1 text-center">調理室</th>
                               <th className="px-2 py-1 text-center">浴室</th>
@@ -1919,7 +2000,7 @@ export default function CertificateCreatePage() {
                                           },
                                         },
                                       }))}
-                                      className="w-16 px-1 py-1 text-center text-sm border border-gray-300 rounded-md" />
+                                      className="w-16 px-1 py-1 text-center text-sm border-2 border-stone-200 rounded-2xl" />
                                   </td>
                                 ))}
                               </tr>
@@ -1931,7 +2012,7 @@ export default function CertificateCreatePage() {
                   </div>
 
                   {/* ⑤ 耐久性向上改修工事等 */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
+                  <div className="p-4 border border-stone-200 rounded-2xl">
                     <h3 className="font-bold text-sm mb-3">⑤ 耐久性向上改修工事等</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {([
@@ -1948,7 +2029,7 @@ export default function CertificateCreatePage() {
                         ['pipingMaintenance', '11 給水管・給湯管又は排水管の維持管理又は更新の容易化工事'],
                       ] as const).map(([key, label]) => (
                         <label key={key} className="flex items-start space-x-2 text-sm">
-                          <input type="checkbox" className="w-4 h-4 mt-0.5 text-blue-600 rounded"
+                          <input type="checkbox" className="w-4 h-4 mt-0.5 text-amber-600 rounded"
                             checked={(formData.reformTaxWorkTypes.longTermHousing as Record<string, boolean | string>)[key] === true}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
@@ -1962,11 +2043,11 @@ export default function CertificateCreatePage() {
                       ))}
                     </div>
                     {/* 認定情報 */}
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">長期優良住宅建築等計画の認定情報</p>
+                    <div className="mt-3 pt-3 border-t border-stone-100">
+                      <p className="text-xs font-semibold text-stone-700 mb-2">長期優良住宅建築等計画の認定情報</p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">認定主体</label>
+                          <label className="block text-xs text-stone-600 mb-1">認定主体</label>
                           <input type="text"
                             value={formData.reformTaxWorkTypes.longTermHousing.certAuthority}
                             onChange={(e) => setFormData(prev => ({
@@ -1976,10 +2057,10 @@ export default function CertificateCreatePage() {
                                 longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, certAuthority: e.target.value },
                               },
                             }))}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="○○市長" />
+                            className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" placeholder="○○市長" />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">認定番号</label>
+                          <label className="block text-xs text-stone-600 mb-1">認定番号</label>
                           <input type="text"
                             value={formData.reformTaxWorkTypes.longTermHousing.certNumber}
                             onChange={(e) => setFormData(prev => ({
@@ -1989,10 +2070,10 @@ export default function CertificateCreatePage() {
                                 longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, certNumber: e.target.value },
                               },
                             }))}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" placeholder="第○○号" />
+                            className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" placeholder="第○○号" />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">認定年月日</label>
+                          <label className="block text-xs text-stone-600 mb-1">認定年月日</label>
                           <input type="date"
                             value={formData.reformTaxWorkTypes.longTermHousing.certDate}
                             onChange={(e) => setFormData(prev => ({
@@ -2002,13 +2083,13 @@ export default function CertificateCreatePage() {
                                 longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, certDate: e.target.value },
                               },
                             }))}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                            className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" />
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t border-gray-100">
+                    <div className="mt-3 pt-3 border-t border-stone-100">
                       <label className="flex items-center space-x-2 text-sm">
-                        <input type="checkbox" className="w-4 h-4 text-green-600 rounded"
+                        <input type="checkbox" className="w-4 h-4 text-amber-600 rounded"
                           checked={formData.reformTaxWorkTypes.longTermHousing.isExcellentHousing}
                           onChange={(e) => setFormData(prev => ({
                             ...prev,
@@ -2017,25 +2098,26 @@ export default function CertificateCreatePage() {
                               longTermHousing: { ...prev.reformTaxWorkTypes.longTermHousing, isExcellentHousing: e.target.checked },
                             },
                           }))} />
-                        <span className="font-medium text-green-800">認定長期優良住宅に該当する（⑥耐震及び省エネの両方と併せて行う場合）</span>
+                        <span className="font-medium text-emerald-800">認定長期優良住宅に該当する（⑥耐震及び省エネの両方と併せて行う場合）</span>
                       </label>
                     </div>
                   </div>
 
                   {/* ⑦ 子育て対応改修 */}
-                  <div className="p-4 border border-gray-200 rounded-lg">
-                    <h3 className="font-bold text-sm mb-3">⑥ 子育て対応改修工事等</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-4 border border-stone-200 rounded-2xl">
+                    <h3 className="font-bold text-sm mb-1">⑥ 子育て対応改修工事等</h3>
+                    <p className="text-xs text-stone-600 mb-3 ml-4">子育てに係る特例対象個人の負担を軽減するための次のいずれかに該当する増築、改築、修繕又は模様替</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-4">
                       {([
-                        ['accidentPrevention', '1 子どもの事故を防止するための工事'],
-                        ['counterKitchen', '2 対面式キッチンへの交換工事'],
-                        ['securityImprovement', '3 開口部の防犯性を高める工事'],
-                        ['storageIncrease', '4 収納設備を増設する工事'],
-                        ['soundproofing', '5 開口部・界壁・界床の防音性を高める工事'],
-                        ['layoutChange', '6 間取り変更工事'],
+                        ['accidentPrevention', '１　住宅内における子どもの事故を防止するための工事'],
+                        ['counterKitchen', '２　対面式キッチンへの交換工事'],
+                        ['securityImprovement', '３　開口部の防犯性を高める工事'],
+                        ['storageIncrease', '４　収納設備を増設する工事'],
+                        ['soundproofing', '５　開口部・界壁・界床の防音性を高める工事'],
+                        ['layoutChange', '６　間取り変更工事'],
                       ] as const).map(([key, label]) => (
                         <label key={key} className="flex items-center space-x-2 text-sm">
-                          <input type="checkbox" className="w-4 h-4 text-blue-600 rounded"
+                          <input type="checkbox" className="w-4 h-4 text-amber-600 rounded"
                             checked={formData.reformTaxWorkTypes.childcare[key]}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
@@ -2051,13 +2133,13 @@ export default function CertificateCreatePage() {
                   </div>
 
                   {/* 併せて行う第1号〜第6号工事 */}
-                  <div className="p-4 border border-orange-200 bg-orange-50 rounded-lg">
+                  <div className="p-4 border border-orange-200 bg-orange-50 rounded-2xl">
                     <h3 className="font-bold text-sm mb-1">併せて行う第1号〜第6号工事</h3>
-                    <p className="text-xs text-gray-500 mb-4">①〜⑦の工事と併せて行った場合に記入してください。</p>
+                    <p className="text-xs text-stone-500 mb-4">①〜⑦の工事と併せて行った場合に記入してください。</p>
 
                     {/* 第1号工事 */}
                     <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">第1号工事</p>
+                      <p className="text-xs font-semibold text-stone-700 mb-2">第1号工事</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-2">
                         {([
                           ['extension', '1 増築'],
@@ -2086,7 +2168,8 @@ export default function CertificateCreatePage() {
 
                     {/* 第2号工事 */}
                     <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">第2号工事</p>
+                      <p className="text-xs font-semibold text-stone-700 mb-1">第2号工事</p>
+                      <p className="text-xs text-stone-500 mb-2 ml-2">1棟の家屋でその構造上区分された数個の部分を独立して住居その他の用途に供することができるもののうちその者が区分所有する部分について行う次のいずれかに該当する修繕又は模様替</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
                         {([
                           ['floor', '1 床の過半の修繕又は模様替'],
@@ -2115,7 +2198,8 @@ export default function CertificateCreatePage() {
 
                     {/* 第3号工事 */}
                     <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">第3号工事</p>
+                      <p className="text-xs font-semibold text-stone-700 mb-1">第3号工事</p>
+                      <p className="text-xs text-stone-500 mb-2 ml-2">次のいずれか一室の床又は壁の全部の修繕又は模様替</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 ml-2">
                         {([
                           ['livingRoom', '1 居室'],
@@ -2148,8 +2232,9 @@ export default function CertificateCreatePage() {
 
                     {/* 第4号工事 */}
                     <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-1">第4号工事（耐震改修工事）</p>
-                      <p className="text-xs text-red-500 mb-2">※①の工事を実施していない場合のみ選択</p>
+                      <p className="text-xs font-semibold text-stone-700 mb-1">第4号工事（耐震改修工事）</p>
+                      <p className="text-xs text-red-500 mb-1 ml-2">※①の工事を実施していない場合のみ選択</p>
+                      <p className="text-xs text-stone-500 mb-2 ml-2">次の規定又は基準に適合させるための修繕又は模様替</p>
                       <div className="grid grid-cols-1 gap-2 ml-2">
                         {([
                           ['buildingStandard', '1 建築基準法施行令第3章及び第5章の4の規定'],
@@ -2176,8 +2261,9 @@ export default function CertificateCreatePage() {
 
                     {/* 第5号工事 */}
                     <div className="mb-4">
-                      <p className="text-xs font-semibold text-gray-700 mb-1">第5号工事（バリアフリー改修工事）</p>
-                      <p className="text-xs text-red-500 mb-2">※②の工事を実施していない場合のみ選択</p>
+                      <p className="text-xs font-semibold text-stone-700 mb-1">第5号工事（バリアフリー改修工事）</p>
+                      <p className="text-xs text-red-500 mb-1 ml-2">※②の工事を実施していない場合のみ選択</p>
+                      <p className="text-xs text-stone-500 mb-2 ml-2">高齢者等が自立した日常生活を営むのに必要な構造及び設備の基準に適合させるための次のいずれかに該当する修繕又は模様替</p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
                         {([
                           ['pathwayExpansion', '1 通路又は出入口の拡幅'],
@@ -2210,36 +2296,43 @@ export default function CertificateCreatePage() {
 
                     {/* 第6号工事 */}
                     <div>
-                      <p className="text-xs font-semibold text-gray-700 mb-1">第6号工事（省エネ改修工事）</p>
-                      <p className="text-xs text-red-500 mb-2">※③の工事を実施していない場合のみ選択</p>
-                      <div className="ml-2 space-y-3">
+                      <p className="text-xs font-semibold text-stone-700 mb-1">第6号工事（省エネ改修工事）</p>
+                      <p className="text-xs text-red-500 mb-2 ml-2">※③の工事を実施していない場合のみ選択</p>
+                      <div className="ml-2 space-y-4">
+
+                        {/* A. 全ての居室の全ての窓の断熱改修工事を実施した場合 */}
                         <div>
-                          <p className="text-xs text-gray-500 mb-1">A. 窓の断熱改修</p>
-                          <div className="flex flex-wrap gap-3">
-                            {[['1', '1 断熱性を高める'], ['2', '2 断熱性を相当程度高める'], ['3', '3 断熱性を著しく高める']].map(([val, label]) => (
-                              <label key={val} className="flex items-center space-x-1 text-sm">
-                                <input type="radio" name="addWork6WindowType"
+                          <p className="text-xs font-semibold text-stone-600 mb-2">全ての居室の全ての窓の断熱改修工事を実施した場合</p>
+                          <p className="text-xs text-stone-500 mb-2 ml-2">エネルギーの使用の合理化に著しく貢する次のいずれかに該当する修繕若しくは模様替又はエネルギーの使用の合理化に相当程度貢する次のいずれかに該当する修繕若しくは模様替</p>
+                          <div className="space-y-1 ml-4">
+                            {([
+                              ['1', '１　全ての居室の全ての窓の断熱性を高める工事'],
+                              ['2', '２　全ての居室の全ての窓の断熱性を相当程度高める工事'],
+                              ['3', '３　全ての居室の全ての窓の断熱性を著しく高める工事'],
+                            ] as [string, string][]).map(([val, label]) => (
+                              <label key={val} className="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
                                   checked={formData.reformTaxWorkTypes.additionalWorks.work6.windowInsulationType === val}
-                                  onChange={() => setFormData(prev => ({
+                                  onChange={(e) => setFormData(prev => ({
                                     ...prev,
                                     reformTaxWorkTypes: {
                                       ...prev.reformTaxWorkTypes,
                                       additionalWorks: {
                                         ...prev.reformTaxWorkTypes.additionalWorks,
-                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, windowInsulationType: val },
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, windowInsulationType: e.target.checked ? val : '' },
                                       },
                                     },
-                                  }))}
-                                  className="w-3 h-3" />
+                                  }))} />
                                 <span>{label}</span>
                               </label>
                             ))}
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                          <p className="text-xs text-stone-500 mt-3 mb-2 ml-2">上記１から３のいずれかと併せて行う次のいずれかに該当する修繕又は模様替</p>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 ml-4">
                             {([
-                              ['ceilingInsulation', '4 天井等の断熱性を高める工事'],
-                              ['wallInsulation', '5 壁の断熱性を高める工事'],
-                              ['floorInsulation', '6 床等の断熱性を高める工事'],
+                              ['ceilingInsulation', '４　天井等の断熱性を高める工事'],
+                              ['wallInsulation', '５　壁の断熱性を高める工事'],
+                              ['floorInsulation', '６　床等の断熱性を高める工事'],
                             ] as const).map(([key, label]) => (
                               <label key={key} className="flex items-center space-x-2 text-sm">
                                 <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
@@ -2258,45 +2351,45 @@ export default function CertificateCreatePage() {
                               </label>
                             ))}
                           </div>
-                          <div className="mt-2 flex flex-wrap gap-3">
-                            <span className="text-xs text-gray-600">地域区分:</span>
-                            {['1','2','3','4','5','6','7','8'].map(n => (
-                              <label key={n} className="flex items-center space-x-1 text-xs">
-                                <input type="radio" name="addWork6Region"
-                                  checked={formData.reformTaxWorkTypes.additionalWorks.work6.regionCode === n}
-                                  onChange={() => setFormData(prev => ({
-                                    ...prev,
-                                    reformTaxWorkTypes: {
-                                      ...prev.reformTaxWorkTypes,
-                                      additionalWorks: {
-                                        ...prev.reformTaxWorkTypes.additionalWorks,
-                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, regionCode: n },
-                                      },
-                                    },
-                                  }))}
-                                  className="w-3 h-3" />
-                                <span>{n}</span>
-                              </label>
-                            ))}
-                          </div>
-                          <div className="mt-2">
-                            <span className="text-xs text-gray-600">改修工事前の断熱等性能等級:</span>
-                            <div className="flex gap-3 mt-1">
-                              {['1','2','3'].map(g => (
-                                <label key={g} className="flex items-center space-x-1 text-xs">
-                                  <input type="radio" name="addWork6GradeBefore"
-                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.energyGradeBefore === g}
-                                    onChange={() => setFormData(prev => ({
+                          <div className="mt-3 ml-4 flex items-center gap-3 flex-wrap">
+                            <span className="text-xs font-semibold text-stone-700 shrink-0">地域区分</span>
+                            <div className="flex flex-wrap gap-2">
+                              {['1','2','3','4','5','6','7','8'].map(n => (
+                                <label key={n} className="flex items-center space-x-1 text-xs">
+                                  <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.regionCode === n}
+                                    onChange={(e) => setFormData(prev => ({
                                       ...prev,
                                       reformTaxWorkTypes: {
                                         ...prev.reformTaxWorkTypes,
                                         additionalWorks: {
                                           ...prev.reformTaxWorkTypes.additionalWorks,
-                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, energyGradeBefore: g },
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, regionCode: e.target.checked ? n : '' },
                                         },
                                       },
-                                    }))}
-                                    className="w-3 h-3" />
+                                    }))} />
+                                  <span>{n}地域</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mt-2 ml-4">
+                            <span className="text-xs font-semibold text-stone-700">改修工事前の住宅が相当する断熱等性能等級</span>
+                            <div className="flex gap-3 mt-1">
+                              {['1','2','3'].map(g => (
+                                <label key={g} className="flex items-center space-x-1 text-xs">
+                                  <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                    checked={formData.reformTaxWorkTypes.additionalWorks.work6.energyGradeBefore === g}
+                                    onChange={(e) => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxWorkTypes: {
+                                        ...prev.reformTaxWorkTypes,
+                                        additionalWorks: {
+                                          ...prev.reformTaxWorkTypes.additionalWorks,
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, energyGradeBefore: e.target.checked ? g : '' },
+                                        },
+                                      },
+                                    }))} />
                                   <span>等級{g}</span>
                                 </label>
                               ))}
@@ -2304,15 +2397,33 @@ export default function CertificateCreatePage() {
                           </div>
                         </div>
 
-                        {/* B. 認定低炭素建築物 */}
-                        <div className="border-t border-gray-200 pt-2">
-                          <p className="text-xs text-gray-500 mb-1">B. 認定低炭素建築物新築等計画に基づく工事の場合</p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                        {/* B. 認定低炭素建築物新築等計画に基づく工事の場合 */}
+                        <div className="border-t border-stone-200 pt-3">
+                          <p className="text-xs font-semibold text-stone-600 mb-2">認定低炭素建築物新築等計画に基づく工事の場合</p>
+                          <p className="text-xs text-stone-500 mb-2 ml-2">次に該当する修繕又は模様替</p>
+                          <div className="ml-4 mb-2">
+                            <label className="flex items-center space-x-2 text-sm">
+                              <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                checked={formData.reformTaxWorkTypes.additionalWorks.work6.lowCarbon.windowInsulation}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  reformTaxWorkTypes: {
+                                    ...prev.reformTaxWorkTypes,
+                                    additionalWorks: {
+                                      ...prev.reformTaxWorkTypes.additionalWorks,
+                                      work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, lowCarbon: { ...prev.reformTaxWorkTypes.additionalWorks.work6.lowCarbon, windowInsulation: e.target.checked } },
+                                    },
+                                  },
+                                }))} />
+                              <span>１　窓</span>
+                            </label>
+                          </div>
+                          <p className="text-xs text-stone-500 mb-2 ml-2">上記1と併せて行う次のいずれかに該当する修繕又は模様替</p>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 ml-4">
                             {([
-                              ['windowInsulation', '1 窓'],
-                              ['ceilingInsulation', '2 天井等'],
-                              ['wallInsulation', '3 壁'],
-                              ['floorInsulation', '4 床等'],
+                              ['ceilingInsulation', '２　天井等'],
+                              ['wallInsulation', '３　壁'],
+                              ['floorInsulation', '４　床等'],
                             ] as const).map(([key, label]) => (
                               <label key={key} className="flex items-center space-x-2 text-sm">
                                 <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
@@ -2331,14 +2442,14 @@ export default function CertificateCreatePage() {
                               </label>
                             ))}
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2 ml-2">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3 ml-4">
                             {([
-                              ['certAuthority', '認定主体'],
-                              ['certNumber', '認定番号'],
-                              ['certDate', '認定年月日'],
+                              ['certAuthority', '低炭素建築物新築等計画の認定主体'],
+                              ['certNumber', '低炭素建築物新築等計画の認定番号'],
+                              ['certDate', '低炭素建築物新築等計画の認定年月日'],
                             ] as const).map(([key, label]) => (
                               <div key={key}>
-                                <label className="block text-xs text-gray-600 mb-1">{label}</label>
+                                <label className="block text-xs text-stone-600 mb-1">{label}</label>
                                 <input type={key === 'certDate' ? 'date' : 'text'}
                                   value={formData.reformTaxWorkTypes.additionalWorks.work6.lowCarbon[key]}
                                   onChange={(e) => setFormData(prev => ({
@@ -2351,21 +2462,39 @@ export default function CertificateCreatePage() {
                                       },
                                     },
                                   }))}
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                                  className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" />
                               </div>
                             ))}
                           </div>
                         </div>
 
-                        {/* C. 住宅性能評価書 */}
-                        <div className="border-t border-gray-200 pt-2">
-                          <p className="text-xs text-gray-500 mb-1">C. 住宅性能評価書により証明される場合</p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                        {/* C. 改修工事後の住宅の一定の省エネ性能が住宅性能評価書により証明される場合 */}
+                        <div className="border-t border-stone-200 pt-3">
+                          <p className="text-xs font-semibold text-stone-600 mb-2">改修工事後の住宅の一定の省エネ性能が住宅性能評価書により証明される場合</p>
+                          <p className="text-xs text-stone-500 mb-2 ml-2">エネルギーの使用の合理化に著しく貢する次のいずれかに該当する修繕若しくは模様替又はエネルギーの使用の合理化に相当程度貢する次に該当する修繕若しくは模様替</p>
+                          <div className="ml-4 mb-2">
+                            <label className="flex items-center space-x-2 text-sm">
+                              <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                checked={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.windowInsulation}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  reformTaxWorkTypes: {
+                                    ...prev.reformTaxWorkTypes,
+                                    additionalWorks: {
+                                      ...prev.reformTaxWorkTypes.additionalWorks,
+                                      work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, windowInsulation: e.target.checked } },
+                                    },
+                                  },
+                                }))} />
+                              <span>１　窓の断熱性を高める工事</span>
+                            </label>
+                          </div>
+                          <p className="text-xs text-stone-500 mb-2 ml-2">上記1と併せて行う次のいずれかに該当する修繕又は模様替</p>
+                          <div className="space-y-1 ml-4">
                             {([
-                              ['windowInsulation', '1 窓の断熱性を高める工事'],
-                              ['ceilingInsulation', '2 天井等の断熱性を高める工事'],
-                              ['wallInsulation', '3 壁の断熱性を高める工事'],
-                              ['floorInsulation', '4 床等の断熱性を高める工事'],
+                              ['ceilingInsulation', '２　天井等の断熱性を高める工事'],
+                              ['wallInsulation', '３　壁の断熱性を高める工事'],
+                              ['floorInsulation', '４　床等の断熱性を高める工事'],
                             ] as const).map(([key, label]) => (
                               <label key={key} className="flex items-center space-x-2 text-sm">
                                 <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
@@ -2384,111 +2513,172 @@ export default function CertificateCreatePage() {
                               </label>
                             ))}
                           </div>
-                          <div className="mt-2 ml-2">
-                            <span className="text-xs text-gray-600">地域区分:</span>
-                            <div className="flex flex-wrap gap-2 mt-1">
+                          <div className="mt-3 ml-4 flex items-center gap-3 flex-wrap">
+                            <span className="text-xs font-semibold text-stone-700 shrink-0">地域区分</span>
+                            <div className="flex flex-wrap gap-2">
                               {['1','2','3','4','5','6','7','8'].map(n => (
                                 <label key={n} className="flex items-center space-x-1 text-xs">
-                                  <input type="radio" name="addWork6PerfRegion"
+                                  <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
                                     checked={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.regionCode === n}
-                                    onChange={() => setFormData(prev => ({
+                                    onChange={(e) => setFormData(prev => ({
                                       ...prev,
                                       reformTaxWorkTypes: {
                                         ...prev.reformTaxWorkTypes,
                                         additionalWorks: {
                                           ...prev.reformTaxWorkTypes.additionalWorks,
-                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, regionCode: n } },
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, regionCode: e.target.checked ? n : '' } },
                                         },
                                       },
-                                    }))}
-                                    className="w-3 h-3" />
-                                  <span>{n}</span>
+                                    }))} />
+                                  <span>{n}地域</span>
                                 </label>
                               ))}
                             </div>
                           </div>
-                          <div className="mt-2 ml-2">
-                            <span className="text-xs text-gray-600">改修工事前の断熱等性能等級:</span>
+                          <div className="mt-2 ml-4">
+                            <span className="text-xs font-semibold text-stone-700">改修工事前の住宅が相当する断熱等性能等級</span>
                             <div className="flex gap-3 mt-1">
                               {['1','2','3'].map(g => (
                                 <label key={g} className="flex items-center space-x-1 text-xs">
-                                  <input type="radio" name="addWork6PerfGradeBefore"
+                                  <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
                                     checked={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.energyGradeBefore === g}
-                                    onChange={() => setFormData(prev => ({
+                                    onChange={(e) => setFormData(prev => ({
                                       ...prev,
                                       reformTaxWorkTypes: {
                                         ...prev.reformTaxWorkTypes,
                                         additionalWorks: {
                                           ...prev.reformTaxWorkTypes.additionalWorks,
-                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, energyGradeBefore: g } },
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, energyGradeBefore: e.target.checked ? g : '' } },
                                         },
                                       },
-                                    }))}
-                                    className="w-3 h-3" />
+                                    }))} />
                                   <span>等級{g}</span>
                                 </label>
                               ))}
                             </div>
                           </div>
-                          <div className="mt-2 ml-2">
-                            <span className="text-xs text-gray-600">改修工事後の断熱等性能等級:</span>
+                          <div className="mt-2 ml-4">
+                            <span className="text-xs font-semibold text-stone-700">改修工事後の断熱等性能等級</span>
                             <div className="flex gap-3 mt-1">
-                              {[['1', '断熱等性能等級２'], ['2', '断熱等性能等級３'], ['3', '断熱等性能等級４以上']].map(([val, label]) => (
+                              {[['1', '１　断熱等性能等級２'], ['2', '２　断熱等性能等級３'], ['3', '３　断熱等性能等級４以上']].map(([val, label]) => (
                                 <label key={val} className="flex items-center space-x-1 text-xs">
-                                  <input type="radio" name="addWork6PerfGradeAfter"
+                                  <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
                                     checked={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.energyGradeAfter === val}
-                                    onChange={() => setFormData(prev => ({
+                                    onChange={(e) => setFormData(prev => ({
                                       ...prev,
                                       reformTaxWorkTypes: {
                                         ...prev.reformTaxWorkTypes,
                                         additionalWorks: {
                                           ...prev.reformTaxWorkTypes.additionalWorks,
-                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, energyGradeAfter: val } },
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, energyGradeAfter: e.target.checked ? val : '' } },
                                         },
                                       },
-                                    }))}
-                                    className="w-3 h-3" />
+                                    }))} />
                                   <span>{label}</span>
                                 </label>
                               ))}
                             </div>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2 ml-2">
-                            {([
-                              ['evalAgencyName', '登録住宅性能評価機関の名称'],
-                              ['evalRegistrationNumber', '登録番号'],
-                              ['evalCertNumber', '住宅性能評価書の交付番号'],
-                              ['evalCertDate', '住宅性能評価書の交付年月日'],
-                            ] as const).map(([key, label]) => (
-                              <div key={key}>
-                                <label className="block text-xs text-gray-600 mb-1">{label}</label>
-                                <input type={key === 'evalCertDate' ? 'date' : 'text'}
-                                  value={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval[key]}
+                          <div className="mt-3 ml-4">
+                            <p className="text-xs font-semibold text-stone-700 mb-2">住宅性能評価書を交付した登録住宅性能評価機関</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs text-stone-600 mb-1">名称</label>
+                                <input type="text"
+                                  value={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.evalAgencyName}
                                   onChange={(e) => setFormData(prev => ({
                                     ...prev,
                                     reformTaxWorkTypes: {
                                       ...prev.reformTaxWorkTypes,
                                       additionalWorks: {
                                         ...prev.reformTaxWorkTypes.additionalWorks,
-                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, [key]: e.target.value } },
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, evalAgencyName: e.target.value } },
                                       },
                                     },
                                   }))}
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                                  className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" />
                               </div>
-                            ))}
+                              <div>
+                                <label className="block text-xs text-stone-600 mb-1">登録番号</label>
+                                <input type="text"
+                                  value={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.evalRegistrationNumber}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, evalRegistrationNumber: e.target.value } },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" placeholder="第○○号" />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                              <div>
+                                <label className="block text-xs text-stone-600 mb-1">住宅性能評価書の交付番号</label>
+                                <input type="text"
+                                  value={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.evalCertNumber}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, evalCertNumber: e.target.value } },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" placeholder="第○○号" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-stone-600 mb-1">住宅性能評価書の交付年月日</label>
+                                <input type="date"
+                                  value={formData.reformTaxWorkTypes.additionalWorks.work6.performanceEval.evalCertDate}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxWorkTypes: {
+                                      ...prev.reformTaxWorkTypes,
+                                      additionalWorks: {
+                                        ...prev.reformTaxWorkTypes.additionalWorks,
+                                        work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, performanceEval: { ...prev.reformTaxWorkTypes.additionalWorks.work6.performanceEval, evalCertDate: e.target.value } },
+                                      },
+                                    },
+                                  }))}
+                                  className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" />
+                              </div>
+                            </div>
                           </div>
                         </div>
 
-                        {/* D. 長期優良住宅認定 */}
-                        <div className="border-t border-gray-200 pt-2">
-                          <p className="text-xs text-gray-500 mb-1">D. 増改築による長期優良住宅建築等計画の認定により証明される場合</p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 ml-2">
+                        {/* D. 増改築による長期優良住宅建築等計画の認定により証明される場合 */}
+                        <div className="border-t border-stone-200 pt-3">
+                          <p className="text-xs font-semibold text-stone-600 mb-2">増改築による長期優良住宅建築等計画の認定により証明される場合</p>
+                          <p className="text-xs text-stone-500 mb-2 ml-2">エネルギーの使用の合理化に著しく貢する次のいずれかに該当する修繕若しくは模様替又はエネルギーの使用の合理化に相当程度貢する次に該当する修繕若しくは模様替</p>
+                          <div className="ml-4 mb-2">
+                            <label className="flex items-center space-x-2 text-sm">
+                              <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
+                                checked={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert.windowInsulation}
+                                onChange={(e) => setFormData(prev => ({
+                                  ...prev,
+                                  reformTaxWorkTypes: {
+                                    ...prev.reformTaxWorkTypes,
+                                    additionalWorks: {
+                                      ...prev.reformTaxWorkTypes.additionalWorks,
+                                      work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, windowInsulation: e.target.checked } },
+                                    },
+                                  },
+                                }))} />
+                              <span>１　窓の断熱性を高める工事</span>
+                            </label>
+                          </div>
+                          <p className="text-xs text-stone-500 mb-2 ml-2">上記1と併せて行う次のいずれかに該当する修繕又は模様替</p>
+                          <div className="space-y-1 ml-4">
                             {([
-                              ['windowInsulation', '1 窓の断熱性を高める工事'],
-                              ['ceilingInsulation', '2 天井等の断熱性を高める工事'],
-                              ['wallInsulation', '3 壁の断熱性を高める工事'],
-                              ['floorInsulation', '4 床等の断熱性を高める工事'],
+                              ['ceilingInsulation', '２　天井等の断熱性を高める工事'],
+                              ['wallInsulation', '３　壁の断熱性を高める工事'],
+                              ['floorInsulation', '４　床等の断熱性を高める工事'],
                             ] as const).map(([key, label]) => (
                               <label key={key} className="flex items-center space-x-2 text-sm">
                                 <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
@@ -2507,83 +2697,80 @@ export default function CertificateCreatePage() {
                               </label>
                             ))}
                           </div>
-                          <div className="mt-2 ml-2">
-                            <span className="text-xs text-gray-600">地域区分:</span>
-                            <div className="flex flex-wrap gap-2 mt-1">
+                          <div className="mt-3 ml-4 flex items-center gap-3 flex-wrap">
+                            <span className="text-xs font-semibold text-stone-700 shrink-0">地域区分</span>
+                            <div className="flex flex-wrap gap-2">
                               {['1','2','3','4','5','6','7','8'].map(n => (
                                 <label key={n} className="flex items-center space-x-1 text-xs">
-                                  <input type="radio" name="addWork6LtRegion"
+                                  <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
                                     checked={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert.regionCode === n}
-                                    onChange={() => setFormData(prev => ({
+                                    onChange={(e) => setFormData(prev => ({
                                       ...prev,
                                       reformTaxWorkTypes: {
                                         ...prev.reformTaxWorkTypes,
                                         additionalWorks: {
                                           ...prev.reformTaxWorkTypes.additionalWorks,
-                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, regionCode: n } },
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, regionCode: e.target.checked ? n : '' } },
                                         },
                                       },
-                                    }))}
-                                    className="w-3 h-3" />
-                                  <span>{n}</span>
+                                    }))} />
+                                  <span>{n}地域</span>
                                 </label>
                               ))}
                             </div>
                           </div>
-                          <div className="mt-2 ml-2">
-                            <span className="text-xs text-gray-600">改修工事前の断熱等性能等級:</span>
+                          <div className="mt-2 ml-4">
+                            <span className="text-xs font-semibold text-stone-700">改修工事前の住宅が相当する断熱等性能等級</span>
                             <div className="flex gap-3 mt-1">
                               {['1','2','3'].map(g => (
                                 <label key={g} className="flex items-center space-x-1 text-xs">
-                                  <input type="radio" name="addWork6LtGradeBefore"
+                                  <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
                                     checked={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert.energyGradeBefore === g}
-                                    onChange={() => setFormData(prev => ({
+                                    onChange={(e) => setFormData(prev => ({
                                       ...prev,
                                       reformTaxWorkTypes: {
                                         ...prev.reformTaxWorkTypes,
                                         additionalWorks: {
                                           ...prev.reformTaxWorkTypes.additionalWorks,
-                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, energyGradeBefore: g } },
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, energyGradeBefore: e.target.checked ? g : '' } },
                                         },
                                       },
-                                    }))}
-                                    className="w-3 h-3" />
+                                    }))} />
                                   <span>等級{g}</span>
                                 </label>
                               ))}
                             </div>
                           </div>
-                          <div className="mt-2 ml-2">
-                            <span className="text-xs text-gray-600">改修工事後の断熱等性能等級:</span>
+                          <div className="mt-2 ml-4">
+                            <span className="text-xs font-semibold text-stone-700">改修工事後の住宅の断熱等性能等級</span>
                             <div className="flex gap-3 mt-1">
-                              {[['1', '断熱等性能等級３'], ['2', '断熱等性能等級４以上']].map(([val, label]) => (
+                              {[['1', '１　断熱等性能等級３'], ['2', '２　断熱等性能等級４以上']].map(([val, label]) => (
                                 <label key={val} className="flex items-center space-x-1 text-xs">
-                                  <input type="radio" name="addWork6LtGradeAfter"
+                                  <input type="checkbox" className="w-4 h-4 text-orange-600 rounded"
                                     checked={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert.energyGradeAfter === val}
-                                    onChange={() => setFormData(prev => ({
+                                    onChange={(e) => setFormData(prev => ({
                                       ...prev,
                                       reformTaxWorkTypes: {
                                         ...prev.reformTaxWorkTypes,
                                         additionalWorks: {
                                           ...prev.reformTaxWorkTypes.additionalWorks,
-                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, energyGradeAfter: val } },
+                                          work6: { ...prev.reformTaxWorkTypes.additionalWorks.work6, longTermCert: { ...prev.reformTaxWorkTypes.additionalWorks.work6.longTermCert, energyGradeAfter: e.target.checked ? val : '' } },
                                         },
                                       },
-                                    }))}
-                                    className="w-3 h-3" />
+                                    }))} />
                                   <span>{label}</span>
                                 </label>
                               ))}
                             </div>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2 ml-2">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3 ml-4">
                             {([
-                              ['certAuthority', '認定主体'],
-                              ['certNumber', '認定番号'],
-                              ['certDate', '認定年月日'],
+                              ['certAuthority', '長期優良住宅建築等計画の認定主体'],
+                              ['certNumber', '長期優良住宅建築等計画の認定番号'],
+                              ['certDate', '長期優良住宅建築等計画の認定年月日'],
                             ] as const).map(([key, label]) => (
                               <div key={key}>
-                                <label className="block text-xs text-gray-600 mb-1">{label}</label>
+                                <label className="block text-xs text-stone-600 mb-1">{label}</label>
                                 <input type={key === 'certDate' ? 'date' : 'text'}
                                   value={formData.reformTaxWorkTypes.additionalWorks.work6.longTermCert[key]}
                                   onChange={(e) => setFormData(prev => ({
@@ -2596,7 +2783,7 @@ export default function CertificateCreatePage() {
                                       },
                                     },
                                   }))}
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md" />
+                                  className="w-full px-2 py-1 text-sm border-2 border-stone-200 rounded-2xl" />
                               </div>
                             ))}
                           </div>
@@ -2612,7 +2799,7 @@ export default function CertificateCreatePage() {
               {(formData.purposeType === 'housing_loan' || formData.purposeType === 'resale') && (
               <>
               {/* 第1号工事 */}
-              <div className="mb-5 p-4 border border-gray-200 rounded-lg">
+              <div className="mb-5 p-4 border border-stone-200 rounded-2xl">
                 <h3 className="font-bold text-sm mb-3">第1号工事</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {([
@@ -2631,7 +2818,7 @@ export default function CertificateCreatePage() {
                             work1: { ...defaultWork1, ...prev.housingLoanWorkTypes.work1, [key]: e.target.checked },
                           },
                         }))}
-                        className="w-4 h-4 text-blue-600 rounded" />
+                        className="w-4 h-4 text-amber-600 rounded" />
                       <span>{label}</span>
                     </label>
                   ))}
@@ -2639,9 +2826,9 @@ export default function CertificateCreatePage() {
               </div>
 
               {/* 第2号工事 */}
-              <div className="mb-5 p-4 border border-gray-200 rounded-lg">
+              <div className="mb-5 p-4 border border-stone-200 rounded-2xl">
                 <h3 className="font-bold text-sm mb-1">第2号工事</h3>
-                <p className="text-xs text-gray-500 mb-3">1棟の家屋で区分所有する部分について行う次のいずれかに該当する修繕又は模様替</p>
+                <p className="text-xs text-stone-500 mb-3">1棟の家屋で区分所有する部分について行う次のいずれかに該当する修繕又は模様替</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {([
                     ['floorOverHalf', '1 床の過半の修繕又は模様替'],
@@ -2659,7 +2846,7 @@ export default function CertificateCreatePage() {
                             work2: { ...defaultWork2, ...prev.housingLoanWorkTypes.work2, [key]: e.target.checked },
                           },
                         }))}
-                        className="w-4 h-4 text-blue-600 rounded" />
+                        className="w-4 h-4 text-amber-600 rounded" />
                       <span>{label}</span>
                     </label>
                   ))}
@@ -2667,9 +2854,9 @@ export default function CertificateCreatePage() {
               </div>
 
               {/* 第3号工事 */}
-              <div className="mb-5 p-4 border border-gray-200 rounded-lg">
+              <div className="mb-5 p-4 border border-stone-200 rounded-2xl">
                 <h3 className="font-bold text-sm mb-1">第3号工事</h3>
-                <p className="text-xs text-gray-500 mb-3">次のいずれか一室の床又は壁の全部の修繕又は模様替</p>
+                <p className="text-xs text-stone-500 mb-3">次のいずれか一室の床又は壁の全部の修繕又は模様替</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {([
                     ['livingRoom', '1 居室'],
@@ -2691,7 +2878,7 @@ export default function CertificateCreatePage() {
                             work3: { ...defaultWork3, ...prev.housingLoanWorkTypes.work3, [key]: e.target.checked },
                           },
                         }))}
-                        className="w-4 h-4 text-blue-600 rounded" />
+                        className="w-4 h-4 text-amber-600 rounded" />
                       <span>{label}</span>
                     </label>
                   ))}
@@ -2699,9 +2886,9 @@ export default function CertificateCreatePage() {
               </div>
 
               {/* 第4号工事（耐震改修工事） */}
-              <div className="mb-5 p-4 border border-gray-200 rounded-lg">
+              <div className="mb-5 p-4 border border-stone-200 rounded-2xl">
                 <h3 className="font-bold text-sm mb-1">第4号工事（耐震改修工事）</h3>
-                <p className="text-xs text-gray-500 mb-3">次の規定又は基準に適合させるための修繕又は模様替</p>
+                <p className="text-xs text-stone-500 mb-3">次の規定又は基準に適合させるための修繕又は模様替</p>
                 <div className="grid grid-cols-1 gap-3">
                   {([
                     ['buildingStandard', '1 建築基準法施行令第3章及び第5章の4の規定'],
@@ -2717,7 +2904,7 @@ export default function CertificateCreatePage() {
                             work4: { ...defaultWork4, ...prev.housingLoanWorkTypes.work4, [key]: e.target.checked },
                           },
                         }))}
-                        className="w-4 h-4 text-blue-600 rounded" />
+                        className="w-4 h-4 text-amber-600 rounded" />
                       <span>{label}</span>
                     </label>
                   ))}
@@ -2725,9 +2912,9 @@ export default function CertificateCreatePage() {
               </div>
 
               {/* 第5号工事（バリアフリー改修工事） */}
-              <div className="mb-5 p-4 border border-gray-200 rounded-lg">
+              <div className="mb-5 p-4 border border-stone-200 rounded-2xl">
                 <h3 className="font-bold text-sm mb-1">第5号工事（バリアフリー改修工事）</h3>
-                <p className="text-xs text-gray-500 mb-3">高齢者等が自立した日常生活を営むのに必要な構造及び設備の基準に適合させるための修繕又は模様替</p>
+                <p className="text-xs text-stone-500 mb-3">高齢者等が自立した日常生活を営むのに必要な構造及び設備の基準に適合させるための修繕又は模様替</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {([
                     ['pathwayExpansion', '1 通路又は出入口の拡幅'],
@@ -2749,7 +2936,7 @@ export default function CertificateCreatePage() {
                             work5: { ...defaultWork5, ...prev.housingLoanWorkTypes.work5, [key]: e.target.checked },
                           },
                         }))}
-                        className="w-4 h-4 text-blue-600 rounded" />
+                        className="w-4 h-4 text-amber-600 rounded" />
                       <span>{label}</span>
                     </label>
                   ))}
@@ -2757,11 +2944,11 @@ export default function CertificateCreatePage() {
               </div>
 
               {/* 第6号工事（省エネ改修工事） */}
-              <div className="mb-5 p-4 border border-gray-200 rounded-lg">
+              <div className="mb-5 p-4 border border-stone-200 rounded-2xl">
                 <h3 className="font-bold text-sm mb-3">第6号工事（省エネ改修工事）</h3>
 
                 <div className="mb-4">
-                  <p className="text-xs text-gray-500 mb-2">エネルギーの使用の合理化に著しく資する修繕若しくは模様替</p>
+                  <p className="text-xs text-stone-500 mb-2">エネルギーの使用の合理化に著しく資する修繕若しくは模様替</p>
                   <div className="space-y-2 ml-2">
                     {([
                       ['allWindowsInsulation', '1 全ての居室の全ての窓の断熱性を高める工事'],
@@ -2787,7 +2974,7 @@ export default function CertificateCreatePage() {
                               },
                             };
                           })}
-                          className="w-4 h-4 text-blue-600 rounded" />
+                          className="w-4 h-4 text-amber-600 rounded" />
                         <span>{label}</span>
                       </label>
                     ))}
@@ -2795,7 +2982,7 @@ export default function CertificateCreatePage() {
                 </div>
 
                 <div className="mb-4">
-                  <p className="text-xs text-gray-500 mb-2">上記1から3のいずれかと併せて行う次のいずれかに該当する修繕又は模様替</p>
+                  <p className="text-xs text-stone-500 mb-2">上記1から3のいずれかと併せて行う次のいずれかに該当する修繕又は模様替</p>
                   <div className="space-y-2 ml-2">
                     {([
                       ['combinedCeilingInsulation', '4 天井等の断熱性を高める工事'],
@@ -2821,7 +3008,7 @@ export default function CertificateCreatePage() {
                               },
                             };
                           })}
-                          className="w-4 h-4 text-blue-600 rounded" />
+                          className="w-4 h-4 text-amber-600 rounded" />
                         <span>{label}</span>
                       </label>
                     ))}
@@ -2829,7 +3016,7 @@ export default function CertificateCreatePage() {
                 </div>
 
                 <div className="mb-4">
-                  <p className="text-xs text-gray-500 mb-2">地域区分</p>
+                  <p className="text-xs text-stone-500 mb-2">地域区分</p>
                   <div className="grid grid-cols-4 md:grid-cols-8 gap-2 ml-2">
                     {([1,2,3,4,5,6,7,8] as const).map((n) => {
                       const key = `region${n}` as keyof typeof defaultWork6.energyEfficiency;
@@ -2853,7 +3040,7 @@ export default function CertificateCreatePage() {
                                 },
                               };
                             })}
-                            className="w-4 h-4 text-blue-600 rounded" />
+                            className="w-4 h-4 text-amber-600 rounded" />
                           <span>{n}地域</span>
                         </label>
                       );
@@ -2862,7 +3049,7 @@ export default function CertificateCreatePage() {
                 </div>
 
                 <div>
-                  <p className="text-xs text-gray-500 mb-2">改修工事前の住宅が相当する断熱等性能等級</p>
+                  <p className="text-xs text-stone-500 mb-2">改修工事前の住宅が相当する断熱等性能等級</p>
                   <div className="flex gap-4 ml-2">
                     {['1', '2', '3'].map((grade) => (
                       <label key={grade} className="flex items-center space-x-1 text-sm">
@@ -2885,7 +3072,7 @@ export default function CertificateCreatePage() {
                               },
                             };
                           })}
-                          className="w-4 h-4 text-blue-600" />
+                          className="w-4 h-4 text-amber-600" />
                         <span>等級{grade}</span>
                       </label>
                     ))}
@@ -2901,15 +3088,15 @@ export default function CertificateCreatePage() {
           {currentStep === 3 && (
             <div>
               {formData.purposeType && PURPOSE_SECTION_INFO[formData.purposeType as PurposeType] && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs font-semibold text-blue-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
-                  <p className="text-sm font-bold text-blue-900 mt-1">
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                  <p className="text-xs font-semibold text-amber-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
+                  <p className="text-sm font-bold text-amber-900 mt-1">
                     {PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].sectionNumber}．{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].title}
                   </p>
                 </div>
               )}
               <h2 className="text-xl font-bold mb-2">（２）実施した工事の内容</h2>
-              <p className="text-sm text-gray-600 mb-6">
+              <p className="text-sm text-stone-600 mb-6">
                 実施した増改築等の内容を記入してください。
               </p>
 
@@ -2920,7 +3107,7 @@ export default function CertificateCreatePage() {
                   workDescriptions: { ...prev.workDescriptions, '_all': e.target.value },
                 }))}
                 rows={8}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                 placeholder="例：居室の窓の断熱改修工事（内窓の設置）、天井・壁・床の断熱改修工事（断熱材の施工）等"
               />
             </div>
@@ -2930,9 +3117,9 @@ export default function CertificateCreatePage() {
           {currentStep === 4 && (
             <div>
               {formData.purposeType && PURPOSE_SECTION_INFO[formData.purposeType as PurposeType] && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs font-semibold text-blue-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
-                  <p className="text-sm font-bold text-blue-900 mt-1">
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                  <p className="text-xs font-semibold text-amber-700">{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].category}</p>
+                  <p className="text-sm font-bold text-amber-900 mt-1">
                     {PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].sectionNumber}．{PURPOSE_SECTION_INFO[formData.purposeType as PurposeType].title}
                   </p>
                 </div>
@@ -2942,14 +3129,14 @@ export default function CertificateCreatePage() {
               {(formData.purposeType === 'housing_loan' || formData.purposeType === 'resale') ? (
                 <div>
                   <h2 className="text-xl font-bold mb-2">（３）実施した工事の費用の額等</h2>
-                  <p className="text-sm text-gray-600 mb-6">
+                  <p className="text-sm text-stone-600 mb-6">
                     公式様式に準拠した費用項目を入力してください。
                   </p>
 
                   <div className="space-y-6">
                     {/* ① 費用の額 */}
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <label className="block text-sm font-semibold text-gray-800 mb-1">
+                    <div className="p-4 border border-stone-200 rounded-2xl">
+                      <label className="block text-sm font-semibold text-stone-800 mb-1">
                         ① 第１号工事～第６号工事に要した費用の額
                       </label>
                       <div className="flex items-center gap-2 max-w-md">
@@ -2961,16 +3148,16 @@ export default function CertificateCreatePage() {
                             ...prev,
                             housingLoanCost: { ...prev.housingLoanCost, totalCost: parseInt(e.target.value) || 0 },
                           }))}
-                          className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                           placeholder="0"
                         />
-                        <span className="text-sm text-gray-600">円</span>
+                        <span className="text-sm text-stone-600">円</span>
                       </div>
                     </div>
 
                     {/* ② 補助金等の交付の有無 */}
-                    <div className="p-4 border border-gray-200 rounded-lg">
-                      <label className="block text-sm font-semibold text-gray-800 mb-3">
+                    <div className="p-4 border border-stone-200 rounded-2xl">
+                      <label className="block text-sm font-semibold text-stone-800 mb-3">
                         ② 第１号工事～第６号工事に係る補助金等の交付の有無
                       </label>
                       <div className="flex items-center gap-4 mb-3">
@@ -3002,8 +3189,8 @@ export default function CertificateCreatePage() {
                         </label>
                       </div>
                       {formData.housingLoanCost.hasSubsidy && (
-                        <div className="pl-4 border-l-2 border-gray-300">
-                          <label className="block text-sm text-gray-700 mb-1">
+                        <div className="pl-4 border-l-2 border-stone-300">
+                          <label className="block text-sm text-stone-700 mb-1">
                             「有」の場合　交付される補助金等の額
                           </label>
                           <div className="flex items-center gap-2 max-w-md">
@@ -3015,10 +3202,10 @@ export default function CertificateCreatePage() {
                                 ...prev,
                                 housingLoanCost: { ...prev.housingLoanCost, subsidyAmount: parseInt(e.target.value) || 0 },
                               }))}
-                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                              className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                               placeholder="0"
                             />
-                            <span className="text-sm text-gray-600">円</span>
+                            <span className="text-sm text-stone-600">円</span>
                           </div>
                         </div>
                       )}
@@ -3030,15 +3217,15 @@ export default function CertificateCreatePage() {
                       const deductible = Math.max(0, cost.totalCost - (cost.hasSubsidy ? cost.subsidyAmount : 0));
                       const over100man = deductible > 1000000;
                       return (
-                        <div className={`p-4 border rounded-lg ${over100man ? 'border-blue-300 bg-blue-50' : 'border-gray-200'}`}>
-                          <label className="block text-sm font-semibold text-gray-800 mb-1">
+                        <div className={`p-4 border rounded-2xl ${over100man ? 'border-amber-300 bg-amber-50' : 'border-stone-200'}`}>
+                          <label className="block text-sm font-semibold text-stone-800 mb-1">
                             ③ ①から②を差し引いた額（100万円を超える場合）
                           </label>
                           <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-gray-900">
+                            <span className="text-lg font-bold text-stone-900">
                               {deductible.toLocaleString()}
                             </span>
-                            <span className="text-sm text-gray-600">円</span>
+                            <span className="text-sm text-stone-600">円</span>
                           </div>
                           {!over100man && cost.totalCost > 0 && (
                             <p className="mt-2 text-xs text-amber-600">
@@ -3073,7 +3260,11 @@ export default function CertificateCreatePage() {
                   const esCalc = calc(rc.energySaving, energyLimit, true);
                   const cohabCalc = calc(rc.cohabitation, 2_500_000, true);
                   const ccCalc = calc(rc.childcare, 2_500_000, true);
-                  // ⑳は公式様式では第1号～第6号工事費用（将来実装）
+
+                  // ⑳ その他増改築等（第1号～第6号工事）
+                  const orCat = rc.otherRenovation;
+                  const orSub = orCat.hasSubsidy ? orCat.subsidyAmount : 0;
+                  const orAfterSub = Math.max(0, orCat.totalAmount - orSub);
 
                   // ⑤ compound calc (OR: 耐震又は省エネ)
                   const lt5 = rc.longTermOr;
@@ -3125,8 +3316,8 @@ export default function CertificateCreatePage() {
                   else if (r18 === p2Ded && p2Ded > 0) r19 = p2Exc;
                   else r19 = p1Exc;
 
-                  // ㉑㉒㉓ 最終計算 — ㉑ = MIN(⑱, ⑲)
-                  const r21 = r18 <= 0 ? 0 : Math.min(r18, r19);
+                  // ㉑㉒㉓ 最終計算 — ㉑ = MIN(⑱, ⑲ + ⑳ウ)
+                  const r21 = r18 <= 0 ? 0 : Math.min(r18, r19 + orAfterSub);
                   const r22 = Math.max(0, 10_000_000 - r17);
                   const r23 = Math.min(r21, r22);
 
@@ -3138,6 +3329,7 @@ export default function CertificateCreatePage() {
                     energySaving: '/energy-saving-reform',
                     cohabitation: '/cohabitation-reform',
                     childcare: '/childcare-reform',
+                    otherRenovation: '/other-renovation',
                   };
 
                   const renderCategory = (
@@ -3149,15 +3341,15 @@ export default function CertificateCreatePage() {
                   ) => {
                     const cat = rc[key] as ReformTaxCostCategory;
                     return (
-                      <div key={key} className="p-4 border border-gray-200 rounded-lg">
+                      <div key={key} className="p-4 border border-stone-200 rounded-2xl">
                         <h4 className="font-bold text-sm mb-3">{label}</h4>
                         <div className="space-y-3">
                           <div>
                             <div className="flex items-center justify-between mb-1">
-                              <label className="block text-xs font-medium text-gray-700">ア　標準的な費用の額</label>
+                              <label className="block text-xs font-medium text-stone-700">ア　標準的な費用の額</label>
                               {calcPageMap[key] && (
                                 <a href={calcPageMap[key]} target="_blank" rel="noopener noreferrer"
-                                  className="text-xs text-blue-600 hover:text-blue-800 underline">計算ページへ →</a>
+                                  className="text-xs text-amber-600 hover:text-amber-800 underline">計算ページへ →</a>
                               )}
                             </div>
                             <div className="flex items-center gap-2 max-w-sm">
@@ -3170,13 +3362,13 @@ export default function CertificateCreatePage() {
                                     [key]: { ...prev.reformTaxCost[key], totalAmount: parseInt(e.target.value) || 0 },
                                   },
                                 }))}
-                                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                                 placeholder="0" />
-                              <span className="text-sm text-gray-600">円</span>
+                              <span className="text-sm text-stone-600">円</span>
                             </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">イ　補助金等の交付の有無</label>
+                            <label className="block text-xs font-medium text-stone-700 mb-1">イ　補助金等の交付の有無</label>
                             <div className="flex items-center gap-4 mb-2">
                               <label className="flex items-center gap-1 text-sm">
                                 <input type="radio" checked={cat.hasSubsidy}
@@ -3198,8 +3390,8 @@ export default function CertificateCreatePage() {
                               </label>
                             </div>
                             {cat.hasSubsidy && (
-                              <div className="pl-4 border-l-2 border-gray-300">
-                                <label className="block text-xs text-gray-600 mb-1">補助金等の額</label>
+                              <div className="pl-4 border-l-2 border-stone-300">
+                                <label className="block text-xs text-stone-600 mb-1">補助金等の額</label>
                                 <div className="flex items-center gap-2 max-w-sm">
                                   <input type="number" min={0}
                                     value={cat.subsidyAmount || ''}
@@ -3207,27 +3399,27 @@ export default function CertificateCreatePage() {
                                       ...prev,
                                       reformTaxCost: { ...prev.reformTaxCost, [key]: { ...prev.reformTaxCost[key], subsidyAmount: parseInt(e.target.value) || 0 } },
                                     }))}
-                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                                     placeholder="0" />
-                                  <span className="text-sm text-gray-600">円</span>
+                                  <span className="text-sm text-stone-600">円</span>
                                 </div>
                               </div>
                             )}
                           </div>
-                          <div className="bg-gray-50 rounded-md p-3 space-y-1 text-sm">
+                          <div className="bg-stone-50 rounded-2xl p-3 space-y-1 text-sm">
                             <div className="flex justify-between">
-                              <span className="text-gray-600">ウ　アからイを差し引いた額{needOver50 ? '（50万円を超える場合）' : ''}</span>
+                              <span className="text-stone-600">ウ　アからイを差し引いた額{needOver50 ? '（50万円を超える場合）' : ''}</span>
                               <span className={`font-medium ${needOver50 && calcResult.afterSub > 0 && calcResult.deductible === 0 ? 'text-amber-600' : ''}`}>
                                 {calcResult.deductible.toLocaleString()}円
                                 {needOver50 && calcResult.afterSub > 0 && calcResult.deductible === 0 && ' (50万円以下)'}
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-600">エ　ウと{limitLabel}のうちいずれか少ない金額</span>
+                              <span className="text-stone-600">エ　ウと{limitLabel}のうちいずれか少ない金額</span>
                               <span className="font-medium">{calcResult.maxDed.toLocaleString()}円</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-600">オ　ウからエを差し引いた額</span>
+                              <span className="text-stone-600">オ　ウからエを差し引いた額</span>
                               <span className="font-medium">{calcResult.excess.toLocaleString()}円</span>
                             </div>
                           </div>
@@ -3246,7 +3438,7 @@ export default function CertificateCreatePage() {
                     if (typeof val === 'boolean') return null;
                     return (
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                        <label className="block text-xs font-medium text-stone-700 mb-1">{label}</label>
                         <div className="flex items-center gap-2 max-w-sm">
                           <input type="number" min={0}
                             value={(val as number) || ''}
@@ -3257,9 +3449,9 @@ export default function CertificateCreatePage() {
                                 [compoundKey]: { ...prev.reformTaxCost[compoundKey], [field]: parseInt(e.target.value) || 0 },
                               },
                             }))}
-                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                            className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                             placeholder="0" />
-                          <span className="text-sm text-gray-600">円</span>
+                          <span className="text-sm text-stone-600">円</span>
                         </div>
                       </div>
                     );
@@ -3274,7 +3466,7 @@ export default function CertificateCreatePage() {
                     const hasSub = (rc[compoundKey] as Record<string, number | boolean>)[hasField] as boolean;
                     return (
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
+                        <label className="block text-xs font-medium text-stone-700 mb-1">{label}</label>
                         <div className="flex items-center gap-4 mb-2">
                           <label className="flex items-center gap-1 text-sm">
                             <input type="radio" checked={hasSub}
@@ -3296,8 +3488,8 @@ export default function CertificateCreatePage() {
                           </label>
                         </div>
                         {hasSub && (
-                          <div className="pl-4 border-l-2 border-gray-300">
-                            <label className="block text-xs text-gray-600 mb-1">補助金等の額</label>
+                          <div className="pl-4 border-l-2 border-stone-300">
+                            <label className="block text-xs text-stone-600 mb-1">補助金等の額</label>
                             <div className="flex items-center gap-2 max-w-sm">
                               <input type="number" min={0}
                                 value={((rc[compoundKey] as Record<string, number | boolean>)[amountField] as number) || ''}
@@ -3305,9 +3497,9 @@ export default function CertificateCreatePage() {
                                   ...prev,
                                   reformTaxCost: { ...prev.reformTaxCost, [compoundKey]: { ...prev.reformTaxCost[compoundKey], [amountField]: parseInt(e.target.value) || 0 } },
                                 }))}
-                                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                                 placeholder="0" />
-                              <span className="text-sm text-gray-600">円</span>
+                              <span className="text-sm text-stone-600">円</span>
                             </div>
                           </div>
                         )}
@@ -3318,7 +3510,7 @@ export default function CertificateCreatePage() {
                   return (
                     <div>
                       <h2 className="text-xl font-bold mb-2">（３）費用の額等</h2>
-                      <p className="text-sm text-gray-600 mb-6">
+                      <p className="text-sm text-stone-600 mb-6">
                         工事カテゴリ別の費用と補助金を入力してください。控除対象額・上限適用・超過額は自動計算されます。
                       </p>
 
@@ -3335,48 +3527,48 @@ export default function CertificateCreatePage() {
                                   ...prev,
                                   reformTaxCost: { ...prev.reformTaxCost, energySaving: { ...prev.reformTaxCost.energySaving, hasSolarPower: e.target.checked } },
                                 }))}
-                                className="w-4 h-4 text-blue-600 rounded" />
-                              <span className="text-gray-700">太陽光発電設備を設置（上限350万円に変更）</span>
+                                className="w-4 h-4 text-amber-600 rounded" />
+                              <span className="text-stone-700">太陽光発電設備を設置（上限350万円に変更）</span>
                             </label>
                           </div>
                         </div>
                         {renderCategory('cohabitation', '④ 多世帯同居改修工事等', cohabCalc, '250万円', true)}
 
                         {/* ⑤ 耐久性向上改修工事等（OR: いずれかと併せて） */}
-                        <div className="p-4 border border-gray-200 rounded-lg">
+                        <div className="p-4 border border-stone-200 rounded-2xl">
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="font-bold text-sm">⑤ 耐久性向上改修工事等（対象住宅耐震改修又は対象一般断熱改修工事等のいずれかと併せて行う場合）</h4>
                             <a href="/long-term-housing" target="_blank" rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap ml-2">計算ページへ →</a>
+                              className="text-xs text-amber-600 hover:text-amber-800 underline whitespace-nowrap ml-2">計算ページへ →</a>
                           </div>
                           <div className="space-y-3">
                             {renderCompoundInput('longTermOr', 'baseTotalAmount', 'ア　当該住宅耐震改修又は当該一般断熱改修工事等に係る標準的な費用の額')}
                             {renderCompoundSubsidy('longTermOr', 'baseHasSubsidy', 'baseSubsidyAmount', 'イ　当該住宅耐震改修又は当該一般断熱改修工事等に係る補助金等の交付の有無')}
-                            <div className="bg-gray-50 rounded-md p-3 space-y-1 text-sm">
+                            <div className="bg-stone-50 rounded-2xl p-3 space-y-1 text-sm">
                               <div className="flex justify-between">
-                                <span className="text-gray-600">ウ　アからイを差し引いた額（50万円を超える場合）</span>
+                                <span className="text-stone-600">ウ　アからイを差し引いた額（50万円を超える場合）</span>
                                 <span className="font-medium">{lt5BaseDed.toLocaleString()}円</span>
                               </div>
                             </div>
                             {renderCompoundInput('longTermOr', 'durabilityTotalAmount', 'エ　当該耐久性向上改修工事等に係る標準的な費用の額')}
                             {renderCompoundSubsidy('longTermOr', 'durabilityHasSubsidy', 'durabilitySubsidyAmount', 'オ　当該耐久性向上改修工事等に係る補助金等の交付の有無')}
-                            <div className="bg-gray-50 rounded-md p-3 space-y-1 text-sm">
+                            <div className="bg-stone-50 rounded-2xl p-3 space-y-1 text-sm">
                               <div className="flex justify-between">
-                                <span className="text-gray-600">カ　エからオを差し引いた額（50万円を超える場合）</span>
+                                <span className="text-stone-600">カ　エからオを差し引いた額（50万円を超える場合）</span>
                                 <span className="font-medium">{lt5DurDed.toLocaleString()}円</span>
                               </div>
                             </div>
-                            <div className="bg-blue-50 rounded-md p-3 space-y-1 text-sm">
+                            <div className="bg-amber-50 rounded-2xl p-3 space-y-1 text-sm">
                               <div className="flex justify-between">
-                                <span className="text-gray-700 font-medium">キ　ウ及びカの合計額</span>
+                                <span className="text-stone-700 font-medium">キ　ウ及びカの合計額</span>
                                 <span className="font-bold">{lt5Ki.toLocaleString()}円</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-600">ク　キと{hasSolar ? '350' : '250'}万円のうちいずれか少ない金額</span>
+                                <span className="text-stone-600">ク　キと{hasSolar ? '350' : '250'}万円のうちいずれか少ない金額</span>
                                 <span className="font-medium">{lt5Ku.toLocaleString()}円</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-600">ケ　キからクを差し引いた額</span>
+                                <span className="text-stone-600">ケ　キからクを差し引いた額</span>
                                 <span className="font-medium">{lt5Ke.toLocaleString()}円</span>
                               </div>
                             </div>
@@ -3384,48 +3576,48 @@ export default function CertificateCreatePage() {
                         </div>
 
                         {/* ⑥ 耐久性向上改修工事等（AND: 両方と併せて） */}
-                        <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
+                        <div className="p-4 border border-emerald-200 bg-emerald-50 rounded-2xl">
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="font-bold text-sm">⑥ 耐久性向上改修工事等（対象住宅耐震改修及び対象一般断熱改修工事等の両方と併せて行う場合）</h4>
                             <a href="/long-term-housing" target="_blank" rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-800 underline whitespace-nowrap ml-2">計算ページへ →</a>
+                              className="text-xs text-amber-600 hover:text-amber-800 underline whitespace-nowrap ml-2">計算ページへ →</a>
                           </div>
                           <div className="space-y-3">
                             {renderCompoundInput('longTermAnd', 'seismicTotalAmount', 'ア　当該住宅耐震改修に係る標準的な費用の額')}
                             {renderCompoundSubsidy('longTermAnd', 'seismicHasSubsidy', 'seismicSubsidyAmount', 'イ　当該住宅耐震改修に係る補助金等の交付の有無')}
-                            <div className="bg-white rounded-md p-3 space-y-1 text-sm">
+                            <div className="bg-white rounded-2xl p-3 space-y-1 text-sm">
                               <div className="flex justify-between">
-                                <span className="text-gray-600">ウ　アからイを差し引いた額（50万円を超える場合）</span>
+                                <span className="text-stone-600">ウ　アからイを差し引いた額（50万円を超える場合）</span>
                                 <span className="font-medium">{lt6SesDed.toLocaleString()}円</span>
                               </div>
                             </div>
                             {renderCompoundInput('longTermAnd', 'energyTotalAmount', 'エ　当該一般断熱改修工事等に係る標準的な費用の額')}
                             {renderCompoundSubsidy('longTermAnd', 'energyHasSubsidy', 'energySubsidyAmount', 'オ　当該一般断熱改修工事等に係る補助金等の交付の有無')}
-                            <div className="bg-white rounded-md p-3 space-y-1 text-sm">
+                            <div className="bg-white rounded-2xl p-3 space-y-1 text-sm">
                               <div className="flex justify-between">
-                                <span className="text-gray-600">カ　エからオを差し引いた額（50万円を超える場合）</span>
+                                <span className="text-stone-600">カ　エからオを差し引いた額（50万円を超える場合）</span>
                                 <span className="font-medium">{lt6EnDed.toLocaleString()}円</span>
                               </div>
                             </div>
                             {renderCompoundInput('longTermAnd', 'durabilityTotalAmount', 'キ　当該耐久性向上改修工事等に係る標準的な費用の額')}
                             {renderCompoundSubsidy('longTermAnd', 'durabilityHasSubsidy', 'durabilitySubsidyAmount', 'ク　当該耐久性向上改修工事等に係る補助金等の交付の有無')}
-                            <div className="bg-white rounded-md p-3 space-y-1 text-sm">
+                            <div className="bg-white rounded-2xl p-3 space-y-1 text-sm">
                               <div className="flex justify-between">
-                                <span className="text-gray-600">ケ　キからクを差し引いた額（50万円を超える場合）</span>
+                                <span className="text-stone-600">ケ　キからクを差し引いた額（50万円を超える場合）</span>
                                 <span className="font-medium">{lt6DurDed.toLocaleString()}円</span>
                               </div>
                             </div>
-                            <div className="bg-green-100 rounded-md p-3 space-y-1 text-sm">
+                            <div className="bg-emerald-100 rounded-2xl p-3 space-y-1 text-sm">
                               <div className="flex justify-between">
-                                <span className="text-gray-700 font-medium">コ　ウ、カ及びケの合計額</span>
+                                <span className="text-stone-700 font-medium">コ　ウ、カ及びケの合計額</span>
                                 <span className="font-bold">{lt6Ko.toLocaleString()}円</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-600">サ　コと{hasSolar ? '600' : '500'}万円のうちいずれか少ない金額</span>
+                                <span className="text-stone-600">サ　コと{hasSolar ? '600' : '500'}万円のうちいずれか少ない金額</span>
                                 <span className="font-medium">{lt6Sa.toLocaleString()}円</span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-600">シ　コからサを差し引いた額</span>
+                                <span className="text-stone-600">シ　コからサを差し引いた額</span>
                                 <span className="font-medium">{lt6Shi.toLocaleString()}円</span>
                               </div>
                             </div>
@@ -3433,29 +3625,102 @@ export default function CertificateCreatePage() {
                         </div>
 
                         {renderCategory('childcare', '⑦ 子育て対応改修工事等', ccCalc, '250万円', true)}
+
+                        {/* ⑳ その他増改築等（第1号～第6号工事） */}
+                        <div className="p-4 border border-stone-200 rounded-2xl">
+                          <h4 className="font-bold text-sm mb-3">⑳ 改修工事と併せて行われた第1号工事～第6号工事</h4>
+                          <div className="space-y-3">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs font-medium text-stone-700">ア　第1号工事～第6号工事に要した費用の額</label>
+                                <a href="/other-renovation" target="_blank" rel="noopener noreferrer"
+                                  className="text-xs text-amber-600 hover:text-amber-800 underline">計算ページへ →</a>
+                              </div>
+                              <div className="flex items-center gap-2 max-w-sm">
+                                <input type="number" min={0}
+                                  value={orCat.totalAmount || ''}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    reformTaxCost: {
+                                      ...prev.reformTaxCost,
+                                      otherRenovation: { ...prev.reformTaxCost.otherRenovation, totalAmount: parseInt(e.target.value) || 0 },
+                                    },
+                                  }))}
+                                  className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
+                                  placeholder="0" />
+                                <span className="text-sm text-stone-600">円</span>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-stone-700 mb-1">イ　補助金等の交付の有無</label>
+                              <div className="flex items-center gap-4 mb-2">
+                                <label className="flex items-center gap-1 text-sm">
+                                  <input type="radio" checked={orCat.hasSubsidy}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxCost: { ...prev.reformTaxCost, otherRenovation: { ...prev.reformTaxCost.otherRenovation, hasSubsidy: true } },
+                                    }))}
+                                    className="w-4 h-4" />
+                                  有
+                                </label>
+                                <label className="flex items-center gap-1 text-sm">
+                                  <input type="radio" checked={!orCat.hasSubsidy}
+                                    onChange={() => setFormData(prev => ({
+                                      ...prev,
+                                      reformTaxCost: { ...prev.reformTaxCost, otherRenovation: { ...prev.reformTaxCost.otherRenovation, hasSubsidy: false, subsidyAmount: 0 } },
+                                    }))}
+                                    className="w-4 h-4" />
+                                  無
+                                </label>
+                              </div>
+                              {orCat.hasSubsidy && (
+                                <div className="pl-4 border-l-2 border-stone-300">
+                                  <label className="block text-xs text-stone-600 mb-1">補助金等の額</label>
+                                  <div className="flex items-center gap-2 max-w-sm">
+                                    <input type="number" min={0}
+                                      value={orCat.subsidyAmount || ''}
+                                      onChange={(e) => setFormData(prev => ({
+                                        ...prev,
+                                        reformTaxCost: { ...prev.reformTaxCost, otherRenovation: { ...prev.reformTaxCost.otherRenovation, subsidyAmount: parseInt(e.target.value) || 0 } },
+                                      }))}
+                                      className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
+                                      placeholder="0" />
+                                    <span className="text-sm text-stone-600">円</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="bg-stone-50 rounded-2xl p-3 space-y-1 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-stone-600">ウ　アからイを差し引いた額</span>
+                                <span className="font-medium">{orAfterSub.toLocaleString()}円</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* ⑧-⑲ パターン比較 */}
-                      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
                         <h4 className="font-bold text-sm mb-3">パターン比較（自動計算）</h4>
                         <div className="space-y-2 text-sm">
-                          <div className="grid grid-cols-4 gap-2 font-medium text-gray-600 text-xs border-b pb-1">
+                          <div className="grid grid-cols-4 gap-2 font-medium text-stone-600 text-xs border-b pb-1">
                             <div></div><div className="text-right">ウ合計</div><div className="text-right">エ合計</div><div className="text-right">オ合計</div>
                           </div>
                           <div className="grid grid-cols-4 gap-2">
-                            <div className="text-gray-700">⑧⑨⑩ P1</div>
+                            <div className="text-stone-700">⑧⑨⑩ P1</div>
                             <div className="text-right">{p1Ded.toLocaleString()}</div>
                             <div className="text-right">{p1Max.toLocaleString()}</div>
                             <div className="text-right">{p1Exc.toLocaleString()}</div>
                           </div>
                           <div className="grid grid-cols-4 gap-2">
-                            <div className="text-gray-700">⑪⑫⑬ P2 (⑤)</div>
+                            <div className="text-stone-700">⑪⑫⑬ P2 (⑤)</div>
                             <div className="text-right">{p2Ded.toLocaleString()}</div>
                             <div className="text-right">{p2Max.toLocaleString()}</div>
                             <div className="text-right">{p2Exc.toLocaleString()}</div>
                           </div>
                           <div className="grid grid-cols-4 gap-2">
-                            <div className="text-gray-700">⑭⑮⑯ P3 (⑥)</div>
+                            <div className="text-stone-700">⑭⑮⑯ P3 (⑥)</div>
                             <div className="text-right">{p3Ded.toLocaleString()}</div>
                             <div className="text-right">{p3Max.toLocaleString()}</div>
                             <div className="text-right">{p3Exc.toLocaleString()}</div>
@@ -3470,22 +3735,22 @@ export default function CertificateCreatePage() {
                       </div>
 
                       {/* ㉑㉒㉓ 最終計算 */}
-                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
                         <h4 className="font-bold text-sm mb-3">最終控除額計算</h4>
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-gray-700">㉑ 5%控除の基礎額</span>
+                            <span className="text-stone-700">㉑ MIN(⑱, ⑲ + ⑳ウ)</span>
                             <span className="font-medium">{r21.toLocaleString()}円</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-gray-700">㉒ 残り控除可能額（1,000万 - ⑰）</span>
+                            <span className="text-stone-700">㉒ 残り控除可能額（1,000万 - ⑰）</span>
                             <span className="font-medium">{r22.toLocaleString()}円</span>
                           </div>
                           <div className="flex justify-between border-t pt-2 font-bold">
                             <span>㉓ 5%控除分 = MIN(㉑, ㉒)</span>
-                            <span className="text-green-700">{r23.toLocaleString()}円</span>
+                            <span className="text-emerald-700">{r23.toLocaleString()}円</span>
                           </div>
-                          <div className="mt-2 pt-2 border-t text-xs text-gray-600">
+                          <div className="mt-2 pt-2 border-t text-xs text-stone-600">
                             <div>10%控除対象: {r17.toLocaleString()}円 → 税額控除: {Math.round(r17 * 0.1).toLocaleString()}円</div>
                             <div>5%控除対象: {r23.toLocaleString()}円 → 税額控除: {Math.round(r23 * 0.05).toLocaleString()}円</div>
                             <div className="font-semibold mt-1">合計税額控除: {(Math.round(r17 * 0.1) + Math.round(r23 * 0.05)).toLocaleString()}円</div>
@@ -3515,10 +3780,10 @@ export default function CertificateCreatePage() {
                 onChange={(newIssuerInfo) => setFormData({ ...formData, issuerInfo: newIssuerInfo })}
               />
               <div className="mt-6 pt-4 border-t">
-                <label className="block text-sm font-medium text-gray-700 mb-1">発行日 *</label>
+                <label className="block text-sm font-medium text-stone-700 mb-1">発行日 *</label>
                 <input type="date" value={formData.issueDate}
                   onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
-                  className="max-w-md w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" />
+                  className="max-w-md w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors" />
               </div>
             </div>
           )}
@@ -3530,24 +3795,24 @@ export default function CertificateCreatePage() {
 
               <div className="space-y-4">
                 {/* 基本情報プレビュー */}
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-stone-50 rounded-2xl p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-semibold">基本情報</h3>
-                    <button type="button" onClick={() => goToStep(1)} className="text-xs text-blue-600">編集</button>
+                    <button type="button" onClick={() => goToStep(1)} className="text-xs text-amber-600">編集</button>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div><span className="text-gray-500">氏名:</span> {formData.applicantName || '(未入力)'}</div>
-                    <div><span className="text-gray-500">住所:</span> {(formData.applicantAddress + (formData.applicantAddressDetail || '')) || '(未入力)'}</div>
-                    <div><span className="text-gray-500">所在地:</span> {formData.propertyAddress || '(未入力)'}</div>
-                    <div><span className="text-gray-500">完了日:</span> {formData.completionDate || '(未入力)'}</div>
+                    <div><span className="text-stone-500">氏名:</span> {formData.applicantName || '(未入力)'}</div>
+                    <div><span className="text-stone-500">住所:</span> {(formData.applicantAddress + (formData.applicantAddressDetail || '')) || '(未入力)'}</div>
+                    <div><span className="text-stone-500">所在地:</span> {formData.propertyAddress || '(未入力)'}</div>
+                    <div><span className="text-stone-500">完了日:</span> {formData.completionDate || '(未入力)'}</div>
                   </div>
                 </div>
 
                 {/* (1) 工事種別プレビュー */}
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-stone-50 rounded-2xl p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-semibold">(1) 実施した工事の種別</h3>
-                    <button type="button" onClick={() => goToStep(2)} className="text-xs text-blue-600">編集</button>
+                    <button type="button" onClick={() => goToStep(2)} className="text-xs text-amber-600">編集</button>
                   </div>
                   <p className="text-sm">
                     {formData.purposeType
@@ -3557,23 +3822,23 @@ export default function CertificateCreatePage() {
                 </div>
 
                 {/* (2) 工事内容記述プレビュー */}
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-stone-50 rounded-2xl p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-semibold">(2) 実施した工事の内容</h3>
-                    <button type="button" onClick={() => goToStep(3)} className="text-xs text-blue-600">編集</button>
+                    <button type="button" onClick={() => goToStep(3)} className="text-xs text-amber-600">編集</button>
                   </div>
                   {formData.workDescriptions['_all'] ? (
                     <p className="text-sm whitespace-pre-wrap">{formData.workDescriptions['_all']}</p>
                   ) : (
-                    <p className="text-sm text-gray-500">(未入力)</p>
+                    <p className="text-sm text-stone-500">(未入力)</p>
                   )}
                 </div>
 
                 {/* (3) 費用サマリープレビュー */}
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-stone-50 rounded-2xl p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-semibold">(3) 工事の費用の額</h3>
-                    <button type="button" onClick={() => goToStep(4)} className="text-xs text-blue-600">編集</button>
+                    <button type="button" onClick={() => goToStep(4)} className="text-xs text-amber-600">編集</button>
                   </div>
                   {(formData.purposeType === 'housing_loan' || formData.purposeType === 'resale') ? (
                     (() => {
@@ -3583,11 +3848,11 @@ export default function CertificateCreatePage() {
                       return hlCost.totalCost > 0 ? (
                         <div className="space-y-1 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-gray-600">① 費用の額:</span>
+                            <span className="text-stone-600">① 費用の額:</span>
                             <span>{hlCost.totalCost.toLocaleString()}円</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-gray-600">② 補助金:</span>
+                            <span className="text-stone-600">② 補助金:</span>
                             <span>{hlCost.hasSubsidy ? `${sub.toLocaleString()}円` : 'なし'}</span>
                           </div>
                           <div className="pt-2 border-t font-semibold flex justify-between">
@@ -3596,7 +3861,7 @@ export default function CertificateCreatePage() {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500">(費用データなし)</p>
+                        <p className="text-sm text-stone-500">(費用データなし)</p>
                       );
                     })()
                   ) : formData.purposeType === 'reform_tax' ? (
@@ -3648,12 +3913,17 @@ export default function CertificateCreatePage() {
                         }
                       }
                       if (rc.childcare.totalAmount > 0) cats.push({ label: '⑦ 子育て対応改修工事等', result: calcCat(rc.childcare, 2_500_000, true) });
+                      if (rc.otherRenovation.totalAmount > 0) {
+                        const orSub = rc.otherRenovation.hasSubsidy ? rc.otherRenovation.subsidyAmount : 0;
+                        const orAfter = Math.max(0, rc.otherRenovation.totalAmount - orSub);
+                        cats.push({ label: '⑳ 第1号～第6号工事', result: { total: rc.otherRenovation.totalAmount, maxDed: orAfter } });
+                      }
 
                       return cats.length > 0 ? (
                         <div className="space-y-1 text-sm">
                           {cats.map(c => (
                             <div key={c.label} className="flex justify-between">
-                              <span className="text-gray-600">{c.label}:</span>
+                              <span className="text-stone-600">{c.label}:</span>
                               <span>ア {c.result.total.toLocaleString()}円 → エ {c.result.maxDed.toLocaleString()}円</span>
                             </div>
                           ))}
@@ -3663,7 +3933,7 @@ export default function CertificateCreatePage() {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500">(費用データなし)</p>
+                        <p className="text-sm text-stone-500">(費用データなし)</p>
                       );
                     })()
                   ) : (
@@ -3673,7 +3943,7 @@ export default function CertificateCreatePage() {
                         <div className="space-y-1 text-sm">
                           {costSummary.details.map(d => (
                             <div key={d.label} className="flex justify-between">
-                              <span className="text-gray-600">{d.label}:</span>
+                              <span className="text-stone-600">{d.label}:</span>
                               <span>{d.total.toLocaleString()}円{d.subsidy > 0 ? ` (補助金: ${d.subsidy.toLocaleString()}円)` : ''}</span>
                             </div>
                           ))}
@@ -3682,24 +3952,24 @@ export default function CertificateCreatePage() {
                             <span>{costSummary.totalAmount.toLocaleString()}円</span>
                           </div>
                           {costSummary.totalSubsidy > 0 && (
-                            <div className="flex justify-between text-green-700">
+                            <div className="flex justify-between text-emerald-700">
                               <span>補助金合計:</span>
                               <span>{costSummary.totalSubsidy.toLocaleString()}円</span>
                             </div>
                           )}
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500">(費用データなし)</p>
+                        <p className="text-sm text-stone-500">(費用データなし)</p>
                       );
                     })()
                   )}
                 </div>
 
                 {/* 証明者情報プレビュー */}
-                <div className="bg-gray-50 rounded-lg p-4">
+                <div className="bg-stone-50 rounded-2xl p-4">
                   <div className="flex justify-between items-center mb-2">
                     <h3 className="font-semibold">証明者情報</h3>
-                    <button type="button" onClick={() => goToStep(5)} className="text-xs text-blue-600">編集</button>
+                    <button type="button" onClick={() => goToStep(5)} className="text-xs text-amber-600">編集</button>
                   </div>
                   <p className="text-sm">
                     {formData.issuerInfo?.organizationType
@@ -3709,18 +3979,18 @@ export default function CertificateCreatePage() {
                 </div>
 
                 {/* 保存ボタン */}
-                <div className="flex gap-3 pt-4 border-t">
+                <div className="flex gap-3 pt-4 border-t border-stone-200">
                   <button onClick={() => saveCertificate('draft')} disabled={isSaving}
-                    className="flex-1 px-4 py-3 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:bg-gray-300 font-medium">
+                    className="flex-1 px-4 py-3 bg-stone-200 text-stone-700 rounded-full hover:bg-stone-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors">
                     {isSaving ? '保存中...' : '下書き保存'}
                   </button>
                   <button onClick={() => saveCertificate('completed')} disabled={isSaving}
-                    className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300 font-medium">
+                    className="flex-1 px-4 py-3 bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white rounded-full shadow-xl shadow-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all hover:scale-105 disabled:hover:scale-100">
                     {isSaving ? '保存中...' : '保存して完了'}
                   </button>
                 </div>
 
-                <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded">
+                <div className="text-xs text-amber-800 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-4 rounded-2xl border-2 border-amber-200">
                   保存後、証明書の詳細画面から工事データの入力・PDF生成ができます。
                   データはお使いのブラウザ内に保存されます。
                 </div>
@@ -3732,11 +4002,11 @@ export default function CertificateCreatePage() {
         {/* ナビゲーションボタン */}
         <div className="flex justify-between mt-6">
           <button type="button" onClick={prevStep} disabled={currentStep === 1}
-            className="px-6 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed">
+            className="px-6 py-3 bg-stone-200 text-stone-700 rounded-full hover:bg-stone-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors">
             前へ
           </button>
           <button type="button" onClick={nextStep} disabled={currentStep === 6}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            className="px-6 py-3 bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white rounded-full shadow-xl shadow-amber-900/20 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-all hover:scale-105 disabled:hover:scale-100">
             次へ
           </button>
         </div>
