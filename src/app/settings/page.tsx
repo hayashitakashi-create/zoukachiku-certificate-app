@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { IssuerInfo } from '@/types/issuer';
-import IssuerInfoForm from '@/components/IssuerInfoForm';
+import IssuerInfoForm from '@/components/issuer/IssuerInfoForm';
 
 export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
