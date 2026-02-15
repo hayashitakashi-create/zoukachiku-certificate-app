@@ -76,6 +76,24 @@ export async function deleteCertificate(id: string): Promise<void> {
   await db.certificates.delete(id);
 }
 
+/** 証明書を複製して返す */
+export async function duplicateCertificate(id: string): Promise<Certificate> {
+  const original = await db.certificates.get(id);
+  if (!original) throw new Error(`Certificate not found: ${id}`);
+
+  const now = new Date().toISOString();
+  const cloned = structuredClone(original);
+  cloned.id = crypto.randomUUID();
+  cloned.createdAt = now;
+  cloned.updatedAt = now;
+  cloned.applicantName = cloned.applicantName ? `${cloned.applicantName}（コピー）` : '（コピー）';
+  cloned.status = 'draft';
+  cloned.issueDate = '';
+
+  await db.certificates.add(cloned);
+  return cloned;
+}
+
 // =============================================
 // 工事データ操作
 // =============================================

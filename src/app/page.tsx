@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 import { certificateStore, type Certificate } from '@/lib/store';
 
@@ -38,19 +39,43 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
   const { data: session } = useSession();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'completed'>('all');
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const userId = session?.user?.id;
 
-  const filteredCertificates = activeFilter === 'all'
-    ? certificates
-    : certificates.filter(cert => {
-        const option = FILTER_OPTIONS.find(o => o.key === activeFilter);
-        return option ? option.purposeTypes.includes(cert.purposeType) : true;
-      });
+  const filteredCertificates = useMemo(() => {
+    let result = certificates;
+    // 1. 用途フィルタ
+    if (activeFilter !== 'all') {
+      const option = FILTER_OPTIONS.find(o => o.key === activeFilter);
+      if (option) {
+        result = result.filter(cert => option.purposeTypes.includes(cert.purposeType));
+      }
+    }
+    // 2. ステータスフィルタ
+    if (statusFilter !== 'all') {
+      result = result.filter(cert => cert.status === statusFilter);
+    }
+    // 3. テキスト検索
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      result = result.filter(cert =>
+        (cert.applicantName && cert.applicantName.toLowerCase().includes(query)) ||
+        (cert.propertyAddress && cert.propertyAddress.toLowerCase().includes(query)) ||
+        (cert.propertyNumber && cert.propertyNumber.toLowerCase().includes(query))
+      );
+    }
+    return result;
+  }, [certificates, activeFilter, statusFilter, searchQuery]);
 
   const loadCertificates = useCallback(async () => {
     try {
@@ -71,6 +96,16 @@ export default function HomePage() {
     if (!confirm(`「${name || '無題'}」を削除しますか？\nこの操作は取り消せません。`)) return;
     await certificateStore.deleteCertificate(id);
     await loadCertificates();
+  };
+
+  const handleDuplicate = async (id: string) => {
+    try {
+      const newCert = await certificateStore.duplicateCertificate(id);
+      router.push(`/certificate/${newCert.id}`);
+    } catch (error) {
+      console.error('Duplication failed:', error);
+      alert('証明書の複製に失敗しました');
+    }
   };
 
   const handleExport = async () => {
@@ -102,6 +137,47 @@ export default function HomePage() {
       }
     };
     input.click();
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    setSelectedIds(new Set(filteredCertificates.map(c => c.id)));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleBatchDownload = async () => {
+    const selected = certificates.filter(c => selectedIds.has(c.id));
+    if (selected.length === 0) return;
+    try {
+      const { batchDownloadPdfs } = await import('@/lib/pdf/batchPdfDownload');
+      await batchDownloadPdfs(selected, (current, total) => {
+        setBatchProgress({ current, total });
+      });
+    } catch (error) {
+      console.error('Batch download failed:', error);
+      alert('PDF一括ダウンロードに失敗しました');
+    } finally {
+      setBatchProgress(null);
+    }
+  };
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
   };
 
   return (
@@ -142,6 +218,17 @@ export default function HomePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
               </button>
+              {(session?.user as { role?: string })?.role === 'admin' && (
+                <Link
+                  href="/admin"
+                  className="text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-full h-12 w-12 flex items-center justify-center transition-colors"
+                  title="管理画面"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </Link>
+              )}
               <Link
                 href="/settings"
                 className="text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-full h-12 w-12 flex items-center justify-center transition-colors"
@@ -179,8 +266,8 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
-        {/* 新規作成ボタン */}
-        <div className="mb-8">
+        {/* 新規作成ボタン＆選択モード */}
+        <div className="mb-8 flex items-center gap-3">
           <Link
             href="/certificate/create"
             className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-700 to-stone-700 hover:from-amber-800 hover:to-stone-800 text-white shadow-xl shadow-amber-900/20 transition-all h-12 px-6 sm:h-14 sm:px-8 rounded-full text-sm sm:text-base font-semibold hover:scale-105"
@@ -190,7 +277,83 @@ export default function HomePage() {
             </svg>
             新しい証明書を作成
           </Link>
+          {certificates.length > 0 && (
+            <button
+              onClick={() => selectionMode ? exitSelectionMode() : setSelectionMode(true)}
+              className={`inline-flex items-center gap-2 h-12 px-5 sm:h-14 sm:px-6 rounded-full text-sm font-semibold transition-all ${
+                selectionMode
+                  ? 'bg-stone-800 text-white shadow-lg'
+                  : 'bg-white text-stone-700 border-2 border-stone-200 hover:border-stone-300 hover:bg-stone-50'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              {selectionMode ? '選択解除' : '選択'}
+            </button>
+          )}
         </div>
+
+        {/* 選択ツールバー */}
+        {selectionMode && (
+          <div className="mb-6 bg-stone-800 text-white rounded-2xl p-4 flex items-center justify-between shadow-xl">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-semibold">{selectedIds.size}件選択中</span>
+              <button
+                onClick={handleSelectAll}
+                className="text-sm text-amber-300 hover:text-amber-200 font-medium"
+              >
+                すべて選択
+              </button>
+              <button
+                onClick={handleDeselectAll}
+                className="text-sm text-stone-400 hover:text-stone-300 font-medium"
+              >
+                選択解除
+              </button>
+            </div>
+            <button
+              onClick={handleBatchDownload}
+              disabled={selectedIds.size === 0 || batchProgress !== null}
+              className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-full px-5 py-2 text-sm font-semibold transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {batchProgress
+                ? `PDF生成中... (${batchProgress.current}/${batchProgress.total})`
+                : 'PDFをまとめてダウンロード'}
+            </button>
+          </div>
+        )}
+
+        {/* 検索バー */}
+        {certificates.length > 0 && (
+          <section className="mb-4">
+            <div className="relative">
+              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="申請者名・住所・家屋番号で検索..."
+                className="w-full pl-12 pr-4 py-3 bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl shadow-stone-200/50 border border-stone-200 text-stone-800 placeholder-stone-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* 用途フィルタ */}
         {certificates.length > 0 && (
@@ -271,6 +434,33 @@ export default function HomePage() {
                     <span className={`ml-1.5 ${activeFilter === 'all' ? 'text-amber-100' : 'text-stone-400'}`}>({certificates.length})</span>
                   </button>
                 </div>
+
+                {/* ステータスフィルタ */}
+                <div className="pt-3 border-t border-stone-100">
+                  <h3 className="text-sm font-bold text-stone-600 mb-3">ステータス</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { key: 'all' as const, label: 'すべて' },
+                      { key: 'draft' as const, label: '下書き' },
+                      { key: 'completed' as const, label: '完了' },
+                    ]).map(option => {
+                      const isSelected = statusFilter === option.key;
+                      return (
+                        <button
+                          key={option.key}
+                          onClick={() => setStatusFilter(option.key)}
+                          className={`px-4 py-2 rounded-full text-xs font-medium transition-all transform hover:scale-105 ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-stone-700 to-stone-800 text-white shadow-lg shadow-stone-900/30'
+                              : 'bg-white text-stone-700 hover:bg-stone-50 border-2 border-stone-200 hover:border-stone-300'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -304,7 +494,7 @@ export default function HomePage() {
             <div className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-8 sm:p-16 text-center">
               <p className="text-stone-500 mb-3">該当する証明書はありません</p>
               <button
-                onClick={() => setActiveFilter('all')}
+                onClick={() => { setActiveFilter('all'); setStatusFilter('all'); setSearchQuery(''); }}
                 className="text-sm text-amber-700 hover:text-amber-800 font-semibold underline underline-offset-2"
               >
                 フィルタを解除
@@ -315,66 +505,129 @@ export default function HomePage() {
               {filteredCertificates.map((cert) => (
                 <div
                   key={cert.id}
-                  className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 sm:p-7 transition-all hover:shadow-2xl hover:shadow-stone-300/50 hover:scale-[1.01] group"
+                  className={`bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border p-4 sm:p-7 transition-all hover:shadow-2xl hover:shadow-stone-300/50 hover:scale-[1.01] group ${
+                    selectionMode && selectedIds.has(cert.id)
+                      ? 'border-amber-400 ring-2 ring-amber-300'
+                      : 'border-stone-200'
+                  }`}
+                  onClick={selectionMode ? () => toggleSelection(cert.id) : undefined}
                 >
                   <div className="flex items-start justify-between">
-                    <Link
-                      href={`/certificate/${cert.id}`}
-                      className="flex-1 min-w-0"
-                    >
-                      <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                        <h3 className="font-bold text-stone-800 truncate text-base">
-                          {cert.applicantName || '(未入力)'}
-                        </h3>
-                        <span
-                          className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full shadow-sm ${
-                            cert.status === 'completed'
-                              ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-amber-600/20'
-                              : 'bg-stone-100 text-stone-600'
-                          }`}
-                        >
-                          {cert.status === 'completed' ? '&#10003; ' : ''}{STATUS_LABELS[cert.status] || cert.status}
-                        </span>
+                    {selectionMode && (
+                      <div className="flex items-center mr-3 mt-1">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(cert.id)}
+                          onChange={() => toggleSelection(cert.id)}
+                          className="w-5 h-5 rounded border-stone-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       </div>
-                      <p className="text-sm text-stone-500 truncate mb-2">
-                        {cert.propertyAddress || '(住所未入力)'}
-                      </p>
-                      <div className="flex items-center gap-3 text-xs">
-                        <span className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full">
-                          <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span className="text-amber-800 font-medium">{PURPOSE_LABELS[cert.purposeType] || cert.purposeType}</span>
-                        </span>
-                        <span className="flex items-center gap-1.5 bg-stone-100 px-3 py-1.5 rounded-full">
-                          <svg className="w-3.5 h-3.5 text-stone-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <span className="text-stone-600 font-medium">更新: {new Date(cert.updatedAt).toLocaleDateString('ja-JP')}</span>
-                        </span>
+                    )}
+                    {selectionMode ? (
+                      <div className="flex-1 min-w-0 cursor-pointer">
+                        <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
+                          <h3 className="font-bold text-stone-800 truncate text-base">
+                            {cert.applicantName || '(未入力)'}
+                          </h3>
+                          <span
+                            className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full shadow-sm ${
+                              cert.status === 'completed'
+                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-amber-600/20'
+                                : 'bg-stone-100 text-stone-600'
+                            }`}
+                          >
+                            {cert.status === 'completed' ? '&#10003; ' : ''}{STATUS_LABELS[cert.status] || cert.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-stone-500 truncate mb-2">
+                          {cert.propertyAddress || '(住所未入力)'}
+                        </p>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full">
+                            <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="text-amber-800 font-medium">{PURPOSE_LABELS[cert.purposeType] || cert.purposeType}</span>
+                          </span>
+                          <span className="flex items-center gap-1.5 bg-stone-100 px-3 py-1.5 rounded-full">
+                            <svg className="w-3.5 h-3.5 text-stone-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-stone-600 font-medium">更新: {new Date(cert.updatedAt).toLocaleDateString('ja-JP')}</span>
+                          </span>
+                        </div>
                       </div>
-                    </Link>
-
-                    <div className="flex items-center gap-2 ml-2 sm:ml-4 shrink-0">
+                    ) : (
                       <Link
                         href={`/certificate/${cert.id}`}
-                        className="h-11 w-11 text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center"
-                        title="編集"
+                        className="flex-1 min-w-0"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
+                          <h3 className="font-bold text-stone-800 truncate text-base">
+                            {cert.applicantName || '(未入力)'}
+                          </h3>
+                          <span
+                            className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full shadow-sm ${
+                              cert.status === 'completed'
+                                ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-amber-600/20'
+                                : 'bg-stone-100 text-stone-600'
+                            }`}
+                          >
+                            {cert.status === 'completed' ? '&#10003; ' : ''}{STATUS_LABELS[cert.status] || cert.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-stone-500 truncate mb-2">
+                          {cert.propertyAddress || '(住所未入力)'}
+                        </p>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full">
+                            <svg className="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="text-amber-800 font-medium">{PURPOSE_LABELS[cert.purposeType] || cert.purposeType}</span>
+                          </span>
+                          <span className="flex items-center gap-1.5 bg-stone-100 px-3 py-1.5 rounded-full">
+                            <svg className="w-3.5 h-3.5 text-stone-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-stone-600 font-medium">更新: {new Date(cert.updatedAt).toLocaleDateString('ja-JP')}</span>
+                          </span>
+                        </div>
                       </Link>
-                      <button
-                        onClick={() => handleDelete(cert.id, cert.applicantName)}
-                        className="h-11 w-11 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center"
-                        title="削除"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
+                    )}
+
+                    {!selectionMode && (
+                      <div className="flex items-center gap-2 ml-2 sm:ml-4 shrink-0">
+                        <Link
+                          href={`/certificate/${cert.id}`}
+                          className="h-11 w-11 text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center"
+                          title="編集"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </Link>
+                        <button
+                          onClick={() => handleDuplicate(cert.id)}
+                          className="h-11 w-11 text-stone-600 hover:text-stone-800 hover:bg-stone-50 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center"
+                          title="複製"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(cert.id, cert.applicantName)}
+                          className="h-11 w-11 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-110 flex items-center justify-center"
+                          title="削除"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

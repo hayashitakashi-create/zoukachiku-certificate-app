@@ -18,6 +18,8 @@ import {
   defaultPropertyTaxForm,
 } from './types';
 import { executeSaveCertificate } from './saveCertificate';
+import { useAutoSaveDraft } from './hooks/useAutoSaveDraft';
+import SaveStatusIndicator from './components/SaveStatusIndicator';
 import Step1BasicInfo from './components/Step1BasicInfo';
 import Step2WorkTypes from './components/Step2WorkTypes';
 import Step3WorkDescription from './components/Step3WorkDescription';
@@ -57,6 +59,13 @@ export default function CertificateCreatePage() {
   };
 
   const [formData, setFormData] = useState<CertificateFormData>(initialFormData);
+
+  // IndexedDB 自動保存フック
+  const { draftId, saveStatus, clearDraftSession } = useAutoSaveDraft(
+    formData,
+    isInitialized,
+    session?.user?.id,
+  );
 
   // ローカルストレージから下書きと証明者設定を復元（初回のみ）
   useEffect(() => {
@@ -322,11 +331,12 @@ export default function CertificateCreatePage() {
       localStorage.removeItem('certificate-form-data');
       const newSessionId = Date.now().toString() + Math.random().toString(36);
       sessionStorage.setItem('certificate-session-id', newSessionId);
+      clearDraftSession();
       setFormData(initialFormData);
       setCurrentStep(1);
       setWasRestored(false);
     }
-  }, [initialFormData]);
+  }, [initialFormData, clearDraftSession]);
 
   // 費用サマリー（確認画面用）
   const getCostSummary = useCallback(() => {
@@ -366,12 +376,13 @@ export default function CertificateCreatePage() {
   const saveCertificate = async (status: 'draft' | 'completed') => {
     setIsSaving(true);
     try {
-      await executeSaveCertificate(formData, status, session?.user?.id);
+      await executeSaveCertificate(formData, status, session?.user?.id, draftId ?? undefined);
 
       // ローカルストレージの下書きをクリア
       localStorage.removeItem('certificate-form-data');
       const newSessionId = Date.now().toString() + Math.random().toString(36);
       sessionStorage.setItem('certificate-session-id', newSessionId);
+      clearDraftSession();
       setWasRestored(false);
 
       alert(status === 'draft' ? '下書きを保存しました' : '証明書を保存しました');
@@ -431,6 +442,9 @@ export default function CertificateCreatePage() {
                 )}
               </div>
             ))}
+          </div>
+          <div className="flex justify-end mt-2">
+            <SaveStatusIndicator status={saveStatus} />
           </div>
         </div>
 

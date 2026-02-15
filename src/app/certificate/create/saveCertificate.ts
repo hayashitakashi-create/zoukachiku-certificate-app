@@ -6,6 +6,7 @@ export async function executeSaveCertificate(
   formData: CertificateFormData,
   status: 'draft' | 'completed',
   userId: string | undefined,
+  existingId?: string,
 ): Promise<string> {
   const fullApplicantAddress = formData.applicantAddress + (formData.applicantAddressDetail || '');
 
@@ -196,9 +197,8 @@ export async function executeSaveCertificate(
     }
   }
 
-  // IndexedDBに証明書を新規作成して保存
-  const cert = await certificateStore.createCertificate(formData.purposeType as PurposeType, userId);
-  await certificateStore.updateCertificate(cert.id, {
+  // IndexedDBに保存（existingIdがあれば既存を更新、なければ新規作成）
+  const updates = {
     applicantName: formData.applicantName,
     applicantAddress: fullApplicantAddress,
     propertyNumber: formData.propertyNumber,
@@ -216,7 +216,26 @@ export async function executeSaveCertificate(
     housingLoanDetail,
     reformTaxDetail,
     status,
-  });
+  };
 
-  return cert.id;
+  let certId: string;
+  if (existingId) {
+    // Verify the existing certificate still exists before updating
+    const existing = await certificateStore.getCertificate(existingId);
+    if (existing) {
+      await certificateStore.updateCertificate(existingId, updates);
+      certId = existingId;
+    } else {
+      // Fallback to creating new if the draft was deleted
+      const cert = await certificateStore.createCertificate(formData.purposeType as PurposeType, userId);
+      await certificateStore.updateCertificate(cert.id, updates);
+      certId = cert.id;
+    }
+  } else {
+    const cert = await certificateStore.createCertificate(formData.purposeType as PurposeType, userId);
+    await certificateStore.updateCertificate(cert.id, updates);
+    certId = cert.id;
+  }
+
+  return certId;
 }
