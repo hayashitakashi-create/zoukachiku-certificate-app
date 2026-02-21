@@ -6,6 +6,7 @@
  */
 
 import type { IssuerInfo } from '@/types/issuer';
+import type { HousingLoanWorkTypes } from '@/types/housingLoanDetail';
 
 // =============================================
 // 共通
@@ -84,20 +85,8 @@ export interface WorkData {
 // 住宅借入金等特別控除 詳細
 // =============================================
 
-export interface HousingLoanWorkType {
-  selected: boolean;
-  description?: string;
-}
-
 export interface HousingLoanDetail {
-  workTypes: {
-    work1?: HousingLoanWorkType; // 第1号工事（増築等）
-    work2?: HousingLoanWorkType; // 第2号工事（耐震）
-    work3?: HousingLoanWorkType; // 第3号工事（バリアフリー）
-    work4?: HousingLoanWorkType; // 第4号工事（省エネ）
-    work5?: HousingLoanWorkType; // 第5号工事（同居対応）
-    work6?: HousingLoanWorkType; // 第6号工事（長期優良住宅化）
-  };
+  workTypes: HousingLoanWorkTypes;
   workDescription: string;
   totalCost: number;
   hasSubsidy: boolean;
@@ -154,6 +143,10 @@ export interface Certificate {
   // リフォーム促進税制詳細（reform_tax の場合のみ）
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   reformTaxDetail?: any;
+
+  // ウィザードフォームデータのスナップショット（編集時の復元用）
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formDataSnapshot?: any;
 
   // タイムスタンプ
   createdAt: string;               // ISO 8601

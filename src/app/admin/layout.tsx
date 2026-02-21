@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
+import { notFound } from 'next/navigation';
 import AdminSidebar from './components/AdminSidebar';
 
 export const metadata = {
@@ -13,13 +13,13 @@ export default async function AdminLayout({
 }) {
   const session = await auth();
 
-  // 二重チェック: 未認証またはadmin以外はリダイレクト
-  if (!session?.user) {
-    redirect('/login');
+  // 防御層: ミドルウェアに加えてレイアウトでもadminロールを検証
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  if (!session?.user || role !== 'admin') {
+    notFound();
   }
-  if ((session.user as { role?: string }).role !== 'admin') {
-    redirect('/');
-  }
+
+  const userName = session.user.name || 'ゲスト';
 
   return (
     <div
@@ -28,7 +28,7 @@ export default async function AdminLayout({
         minHeight: '100vh',
       }}
     >
-      <AdminSidebar userName={session.user.name} />
+      <AdminSidebar userName={userName} />
       <div style={{ marginLeft: '280px' }}>
         <main style={{ padding: '32px' }}>{children}</main>
       </div>

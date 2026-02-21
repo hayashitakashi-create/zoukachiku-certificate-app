@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useCallback } from 'react';
 import type { PurposeType } from '@/lib/store';
 import type { StepProps } from '../types';
 
@@ -8,8 +9,10 @@ type Step1Props = StepProps & {
 };
 
 export default function Step1BasicInfo({ formData, setFormData, wasRestored }: Step1Props) {
+  const postalCodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // 郵便番号から住所を検索
-  const fetchAddressFromPostalCode = async (postalCode: string, fieldType: 'applicant' | 'property') => {
+  const fetchAddressFromPostalCode = useCallback(async (postalCode: string, fieldType: 'applicant' | 'property') => {
     const cleanedPostalCode = postalCode.replace(/-/g, '');
     if (cleanedPostalCode.length !== 7 || !/^\d{7}$/.test(cleanedPostalCode)) return;
 
@@ -28,7 +31,17 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
     } catch (error) {
       console.error('郵便番号検索エラー:', error);
     }
-  };
+  }, [setFormData]);
+
+  // デバウンス付き郵便番号検索
+  const debouncedFetchAddress = useCallback((postalCode: string, fieldType: 'applicant' | 'property') => {
+    if (postalCodeTimerRef.current) {
+      clearTimeout(postalCodeTimerRef.current);
+    }
+    postalCodeTimerRef.current = setTimeout(() => {
+      fetchAddressFromPostalCode(postalCode, fieldType);
+    }, 300);
+  }, [fetchAddressFromPostalCode]);
 
   return (
     <div>
@@ -48,7 +61,7 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
             <div>
               <label className="block text-sm font-medium text-stone-700 mb-1">氏名 *</label>
               <input type="text" value={formData.applicantName}
-                onChange={(e) => setFormData({ ...formData, applicantName: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicantName: e.target.value }))}
                 className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                 placeholder="山田 太郎" />
             </div>
@@ -58,7 +71,7 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
                 onChange={(e) => {
                   const value = e.target.value;
                   setFormData(prev => ({ ...prev, applicantPostalCode: value }));
-                  if (value.replace(/-/g, '').length === 7) fetchAddressFromPostalCode(value, 'applicant');
+                  if (value.replace(/-/g, '').length === 7) debouncedFetchAddress(value, 'applicant');
                 }}
                 className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                 placeholder="1000001" maxLength={8} />
@@ -66,14 +79,14 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-stone-700 mb-1">住所 *</label>
               <input type="text" value={formData.applicantAddress}
-                onChange={(e) => setFormData({ ...formData, applicantAddress: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicantAddress: e.target.value }))}
                 className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                 placeholder="東京都千代田区千代田" />
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-stone-700 mb-1">番地・建物名</label>
               <input type="text" value={formData.applicantAddressDetail}
-                onChange={(e) => setFormData({ ...formData, applicantAddressDetail: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, applicantAddressDetail: e.target.value }))}
                 className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                 placeholder="1-2-3 〇〇ビル 4階" />
             </div>
@@ -90,7 +103,7 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
                 onChange={(e) => {
                   const value = e.target.value;
                   setFormData(prev => ({ ...prev, propertyPostalCode: value }));
-                  if (value.replace(/-/g, '').length === 7) fetchAddressFromPostalCode(value, 'property');
+                  if (value.replace(/-/g, '').length === 7) debouncedFetchAddress(value, 'property');
                 }}
                 className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                 placeholder="1000001" maxLength={8} />
@@ -98,14 +111,14 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-stone-700 mb-1">所在地 *</label>
               <input type="text" value={formData.propertyAddress}
-                onChange={(e) => setFormData({ ...formData, propertyAddress: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, propertyAddress: e.target.value }))}
                 className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                 placeholder="東京都千代田区千代田 1-2-3" />
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-stone-700 mb-1">家屋番号</label>
               <input type="text" value={formData.propertyNumber}
-                onChange={(e) => setFormData({ ...formData, propertyNumber: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, propertyNumber: e.target.value }))}
                 className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                 placeholder="12番地3" />
             </div>
@@ -132,7 +145,7 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
                   <input type="radio" name="purposeType" value={purpose.value}
                     checked={formData.purposeType === purpose.value}
                     onChange={(e) => {
-                      setFormData({ ...formData, purposeType: e.target.value as PurposeType });
+                      setFormData(prev => ({ ...prev, purposeType: e.target.value as PurposeType }));
                     }}
                     className="mt-1 mr-3 shrink-0" />
                   <div>
@@ -158,7 +171,7 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
                   <input type="radio" name="purposeType" value={purpose.value}
                     checked={formData.purposeType === purpose.value}
                     onChange={(e) => {
-                      setFormData({ ...formData, purposeType: e.target.value as PurposeType });
+                      setFormData(prev => ({ ...prev, purposeType: e.target.value as PurposeType }));
                     }}
                     className="mt-1 mr-3 shrink-0" />
                   <div>
@@ -177,7 +190,7 @@ export default function Step1BasicInfo({ formData, setFormData, wasRestored }: S
           <div className="max-w-md">
             <label className="block text-sm font-medium text-stone-700 mb-1">工事完了年月日 *</label>
             <input type="date" value={formData.completionDate}
-              onChange={(e) => setFormData({ ...formData, completionDate: e.target.value })}
+              onChange={(e) => setFormData(prev => ({ ...prev, completionDate: e.target.value }))}
               className="w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors" />
           </div>
         </div>

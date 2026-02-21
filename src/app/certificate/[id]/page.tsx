@@ -382,7 +382,7 @@ export default function CertificateDetailPage({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-stone-800">証明者情報</h2>
             <Link
-              href={`/certificate/create?id=${certificateId}&step=3`}
+              href={`/certificate/create?id=${certificateId}&step=5`}
               className="text-amber-700 hover:text-amber-800 hover:bg-amber-50 rounded-full px-4 py-1.5 text-sm font-medium transition-all no-print"
             >
               編集
@@ -416,7 +416,8 @@ export default function CertificateDetailPage({
           </div>
         </section>
 
-        {/* 改修工事一覧 */}
+        {/* 改修工事一覧（住宅ローン控除以外） */}
+        {certificate.purposeType !== 'housing_loan' && (
         <section className="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-xl shadow-stone-200/50 border border-stone-200 p-4 sm:p-6 md:p-8 transition-all hover:shadow-2xl hover:shadow-stone-300/50">
           <h2 className="text-lg font-bold text-stone-800 mb-4">改修工事一覧</h2>
 
@@ -490,6 +491,7 @@ export default function CertificateDetailPage({
             </div>
           </div>
         </section>
+        )}
 
         {/* メタ情報 */}
         <section className="text-xs text-stone-400 space-y-1">

@@ -83,7 +83,7 @@ function buildCertificates(): Certificate[] {
     hl.subsidyAmount = 0;
     hl.deductibleAmount = 2500000;
     hl.workDescription = '木造2階建て住宅の基礎・壁の耐震補強工事、浴室手すり設置';
-    hl.workTypes = { work1: { selected: true, description: '耐震改修' }, work3: { selected: true, description: 'バリアフリー' } };
+    hl.workTypes = { work1: { extension: false, renovation: false, majorRepair: true, majorRemodeling: false }, work3: { livingRoom: false, kitchen: false, bathroom: true, toilet: false, washroom: false, storage: false, entrance: false, corridor: false } };
 
     certs.push(makeCert({
       applicantName: '田中太郎', applicantAddress: '東京都新宿区西新宿1-1-1',
@@ -123,7 +123,7 @@ function buildCertificates(): Certificate[] {
     hl.subsidyAmount = 500000;
     hl.deductibleAmount = 431500;
     hl.workDescription = '全窓ガラス交換による断熱性能向上、天井断熱改修';
-    hl.workTypes = { work4: { selected: true, description: '省エネ改修' } };
+    hl.workTypes = { work4: { buildingStandard: true, earthquakeSafety: false } };
 
     certs.push(makeCert({
       applicantName: '佐藤花子', applicantAddress: '大阪府大阪市北区梅田2-2-2',
@@ -195,7 +195,7 @@ function buildCertificates(): Certificate[] {
     hl.subsidyAmount = 0;
     hl.deductibleAmount = 2500000;
     hl.workDescription = '二世帯同居のためのキッチン・浴室増設工事';
-    hl.workTypes = { work5: { selected: true, description: '同居対応改修' } };
+    hl.workTypes = { work5: { pathwayExpansion: false, stairSlope: false, bathroomImprovement: true, toiletImprovement: true, handrails: true, stepElimination: false, doorImprovement: false, floorSlipPrevention: false } };
 
     certs.push(makeCert({
       applicantName: '高橋美咲', applicantAddress: '福岡県福岡市博多区博多駅前4-4-4',
@@ -276,7 +276,7 @@ function buildCertificates(): Certificate[] {
     hl.subsidyAmount = 100000;
     hl.deductibleAmount = 882700;
     hl.workDescription = '高齢者対応のための通路拡幅、段差解消、手すり設置工事';
-    hl.workTypes = { work3: { selected: true, description: 'バリアフリー改修' } };
+    hl.workTypes = { work3: { livingRoom: true, kitchen: false, bathroom: false, toilet: false, washroom: false, storage: false, entrance: false, corridor: false } };
 
     certs.push(makeCert({
       applicantName: '伊藤直美', applicantAddress: '宮城県仙台市青葉区一番町6-6-6',
@@ -357,7 +357,7 @@ function buildCertificates(): Certificate[] {
     hl.subsidyAmount = 0;
     hl.deductibleAmount = 672000;
     hl.workDescription = '子育て環境改善のためのチャイルドフェンス・ドア安全装置設置';
-    hl.workTypes = { work6: { selected: true, description: '子育て対応改修' } };
+    hl.workTypes = {};
 
     certs.push(makeCert({
       applicantName: '中村さくら', applicantAddress: '京都府京都市左京区下鴨8-8-8',
@@ -462,9 +462,9 @@ function buildCertificates(): Certificate[] {
     hl.deductibleAmount = 5376600;
     hl.workDescription = '耐震補強（壁）、浴槽交換（バリアフリー）、内窓設置（省エネ）、キッチン・浴室リフォーム';
     hl.workTypes = {
-      work1: { selected: true, description: '耐震改修' },
-      work3: { selected: true, description: 'バリアフリー' },
-      work4: { selected: true, description: '省エネ改修' },
+      work1: { extension: false, renovation: false, majorRepair: true, majorRemodeling: false },
+      work3: { livingRoom: false, kitchen: false, bathroom: true, toilet: false, washroom: false, storage: false, entrance: false, corridor: false },
+      work4: { buildingStandard: false, earthquakeSafety: true },
     };
 
     certs.push(makeCert({

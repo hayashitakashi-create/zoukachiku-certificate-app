@@ -13,6 +13,7 @@ export function useAutoSaveDraft(
   formData: CertificateFormData,
   isInitialized: boolean,
   userId: string | undefined,
+  editingId?: string | null,
 ) {
   const [draftId, setDraftId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -21,6 +22,11 @@ export function useAutoSaveDraft(
 
   // Restore existing draft ID from sessionStorage on mount
   useEffect(() => {
+    // When editing an existing certificate, use its ID as the draft target
+    if (editingId) {
+      setDraftId(editingId);
+      return;
+    }
     const existingId = sessionStorage.getItem(SESSION_KEY);
     if (existingId) {
       // Verify it still exists in IndexedDB
@@ -32,7 +38,7 @@ export function useAutoSaveDraft(
         }
       });
     }
-  }, []);
+  }, [editingId]);
 
   const saveDraft = useCallback(async (data: CertificateFormData) => {
     // Don't save until purposeType is selected
@@ -82,6 +88,8 @@ export function useAutoSaveDraft(
   // Debounced auto-save on formData changes
   useEffect(() => {
     if (!isInitialized) return;
+    // Don't auto-save when editing an existing certificate
+    if (editingId) return;
     // Skip the first render to avoid saving initial/restored data immediately
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -100,7 +108,7 @@ export function useAutoSaveDraft(
         clearTimeout(timerRef.current);
       }
     };
-  }, [formData, isInitialized, saveDraft]);
+  }, [formData, isInitialized, saveDraft, editingId]);
 
   const saveDraftNow = useCallback(() => {
     if (timerRef.current) {

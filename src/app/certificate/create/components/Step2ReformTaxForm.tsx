@@ -331,7 +331,7 @@ export default function Step2ReformTaxForm({ formData, setFormData }: StepProps)
                               ...prev.reformTaxWorkTypes,
                               cohabitation: {
                                 ...prev.reformTaxWorkTypes.cohabitation,
-                                [timing]: { ...prev.reformTaxWorkTypes.cohabitation[timing], [room]: parseInt(e.target.value) || 0 },
+                                [timing]: { ...prev.reformTaxWorkTypes.cohabitation[timing], [room]: Math.max(0, parseInt(e.target.value) || 0) },
                               },
                             },
                           }))}

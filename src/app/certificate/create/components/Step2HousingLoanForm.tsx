@@ -261,10 +261,9 @@ export default function Step2HousingLoanForm({ formData, setFormData }: StepProp
         <div className="flex gap-4 ml-2">
           {['1', '2', '3'].map((grade) => (
             <label key={grade} className="flex items-center space-x-1 text-sm">
-              <input type="radio" name="energyGradeBefore"
-                value={grade}
+              <input type="checkbox"
                 checked={formData.housingLoanWorkTypes.work6?.energyEfficiency?.energyGradeBefore === grade}
-                onChange={() => setFormData(prev => {
+                onChange={(e) => setFormData(prev => {
                   const currentWork6 = prev.housingLoanWorkTypes.work6 ?? defaultWork6;
                   return {
                     ...prev,
@@ -274,13 +273,13 @@ export default function Step2HousingLoanForm({ formData, setFormData }: StepProp
                         ...currentWork6,
                         energyEfficiency: {
                           ...currentWork6.energyEfficiency,
-                          energyGradeBefore: grade,
+                          energyGradeBefore: e.target.checked ? grade : '',
                         },
                       },
                     },
                   };
                 })}
-                className="w-4 h-4 text-amber-600" />
+                className="w-4 h-4 text-amber-600 rounded" />
               <span>等級{grade}</span>
             </label>
           ))}

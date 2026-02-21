@@ -16,7 +16,6 @@ export type {
   StandardWorkItem,
   OtherRenovationItem,
   HousingLoanDetail,
-  HousingLoanWorkType,
   WorkCategory,
   PurposeType,
   CertificateStatus,

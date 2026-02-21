@@ -322,6 +322,17 @@ export async function generateHousingLoanPDF(
     // =======================================
     fillIssuerInfo(page22, certificate, font);
 
+    // =======================================
+    // 不要ページの削除（住宅ローン控除はページ1,3,22のみ使用）
+    // =======================================
+    const keepIndices = new Set([0, 2, 21]); // 0-indexed: page1, page3, page22
+    const totalPages = pdfDoc.getPageCount();
+    for (let i = totalPages - 1; i >= 0; i--) {
+      if (!keepIndices.has(i)) {
+        pdfDoc.removePage(i);
+      }
+    }
+
     // PDFをUint8Arrayとして保存
     return await savePdfToBytes(pdfDoc);
   } catch (error) {

@@ -1,12 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawCallbackUrl = searchParams.get('callbackUrl') || '/';
+  // オープンリダイレクト対策: 相対パスのみ許可
+  const callbackUrl = rawCallbackUrl.startsWith('/') && !rawCallbackUrl.startsWith('//') ? rawCallbackUrl : '/';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -30,7 +42,7 @@ export default function LoginPage() {
         const sessionRes = await fetch('/api/auth/session');
         const session = await sessionRes.json();
         if (session?.user) {
-          router.push('/');
+          router.push(callbackUrl);
           router.refresh();
         } else {
           setError('メールアドレスまたはパスワードが正しくありません');

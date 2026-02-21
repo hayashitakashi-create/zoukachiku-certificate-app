@@ -216,6 +216,7 @@ export async function executeSaveCertificate(
     housingLoanDetail,
     reformTaxDetail,
     status,
+    formDataSnapshot: formData,
   };
 
   let certId: string;

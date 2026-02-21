@@ -87,28 +87,27 @@ function HousingLoanDetailContent() {
         .getCertificate(certificateId)
         .then((cert) => {
           if (cert && cert.housingLoanDetail) {
-            // Store形式からForm形式へマッピング
+            // Store形式からForm形式へマッピング（リッチデータをそのまま復元）
             const detail = cert.housingLoanDetail;
             const formWorkTypes: HousingLoanWorkTypes = {};
 
-            // 簡易マッピング: work1-work6のselectedフラグがtrueなら空のデフォルトオブジェクトをセット
-            if (detail.workTypes.work1?.selected) {
-              formWorkTypes.work1 = defaultWork1;
+            if (detail.workTypes.work1) {
+              formWorkTypes.work1 = { ...defaultWork1, ...detail.workTypes.work1 };
             }
-            if (detail.workTypes.work2?.selected) {
-              formWorkTypes.work2 = defaultWork2;
+            if (detail.workTypes.work2) {
+              formWorkTypes.work2 = { ...defaultWork2, ...detail.workTypes.work2 };
             }
-            if (detail.workTypes.work3?.selected) {
-              formWorkTypes.work3 = defaultWork3;
+            if (detail.workTypes.work3) {
+              formWorkTypes.work3 = { ...defaultWork3, ...detail.workTypes.work3 };
             }
-            if (detail.workTypes.work4?.selected) {
-              formWorkTypes.work4 = defaultWork4;
+            if (detail.workTypes.work4) {
+              formWorkTypes.work4 = { ...defaultWork4, ...detail.workTypes.work4 };
             }
-            if (detail.workTypes.work5?.selected) {
-              formWorkTypes.work5 = defaultWork5;
+            if (detail.workTypes.work5) {
+              formWorkTypes.work5 = { ...defaultWork5, ...detail.workTypes.work5 };
             }
-            if (detail.workTypes.work6?.selected) {
-              formWorkTypes.work6 = defaultWork6;
+            if (detail.workTypes.work6) {
+              formWorkTypes.work6 = { ...defaultWork6, ...detail.workTypes.work6 };
             }
 
             setValue('workTypes', formWorkTypes);
@@ -154,26 +153,26 @@ function HousingLoanDetailContent() {
 
     setIsSaving(true);
     try {
-      // Form形式からStore形式へマッピング
+      // Form形式からStore形式へマッピング（リッチデータをそのまま保存）
       const housingLoanDetail: HousingLoanDetail = {
         workTypes: {
           work1: hasAnyWork1Selected(previewData.workTypes.work1)
-            ? { selected: true, description: '' }
+            ? previewData.workTypes.work1
             : undefined,
           work2: hasAnyWork2Selected(previewData.workTypes.work2)
-            ? { selected: true, description: '' }
+            ? previewData.workTypes.work2
             : undefined,
           work3: hasAnyWork3Selected(previewData.workTypes.work3)
-            ? { selected: true, description: '' }
+            ? previewData.workTypes.work3
             : undefined,
           work4: hasAnyWork4Selected(previewData.workTypes.work4)
-            ? { selected: true, description: '' }
+            ? previewData.workTypes.work4
             : undefined,
           work5: hasAnyWork5Selected(previewData.workTypes.work5)
-            ? { selected: true, description: '' }
+            ? previewData.workTypes.work5
             : undefined,
           work6: hasAnyWork6Selected(previewData.workTypes.work6)
-            ? { selected: true, description: '' }
+            ? previewData.workTypes.work6
             : undefined,
         },
         workDescription: previewData.workDescription || '',

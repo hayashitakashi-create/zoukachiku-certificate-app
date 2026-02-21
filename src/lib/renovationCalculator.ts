@@ -57,9 +57,10 @@ export function calculateSeismicRenovation(
 
   // ア: 工事費総額
   // イ: 補助金額
-  // ウ = ア - イ: 補助金差引後
+  // ウ = (ア-イ > 500,000) ? ア-イ : 0
+  // 50万円超の場合のみ対象（seismic-work-types.tsと整合）
   const afterSubsidy = totalCost - subsidyAmount;
-  const deductibleAmount = Math.max(0, afterSubsidy);
+  const deductibleAmount = afterSubsidy > 500_000 ? afterSubsidy : 0;
 
   // エ = MIN(ウ, 2,500,000): 250万円上限適用
   const maxDeduction = Math.min(deductibleAmount, 2_500_000);

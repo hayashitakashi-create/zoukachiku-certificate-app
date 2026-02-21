@@ -46,11 +46,9 @@ export const authConfig: NextAuthConfig = {
         return true;
       }
 
-      // 管理画面: adminロール必須
+      // 管理画面: 認証済み + adminロールが必要
       if (isOnAdmin) {
-        // ゲストモード・未認証→ログインへ
         if (!isLoggedIn) return false;
-        // 認証済み非admin→ホームへリダイレクト
         const role = (auth?.user as { role?: string })?.role;
         if (role !== 'admin') {
           return Response.redirect(new URL('/', nextUrl));

@@ -421,7 +421,7 @@ export default function CostCalculationStep({ selectedWorkTypes, formState, onCh
                       type="number"
                       min={0}
                       value={state.subsidyAmount || ''}
-                      onChange={(e) => updateCategory(cat, prev => ({ ...prev, subsidyAmount: parseInt(e.target.value) || 0 }))}
+                      onChange={(e) => updateCategory(cat, prev => ({ ...prev, subsidyAmount: Math.max(0, parseInt(e.target.value) || 0) }))}
                       className="max-w-xs w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                       placeholder="0"
                     />
@@ -686,7 +686,7 @@ function OtherRenovationSection({
                     type="number"
                     min={0}
                     value={item.amount || ''}
-                    onChange={(e) => updateItem(item.id, { amount: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => updateItem(item.id, { amount: Math.max(0, parseInt(e.target.value) || 0) })}
                     className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     placeholder="0"
                   />

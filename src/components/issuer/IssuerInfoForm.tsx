@@ -28,7 +28,7 @@ export default function IssuerInfoForm({ issuerInfo, onChange }: Props) {
       const newInfo: Partial<IssuerInfo> = { organizationType: organizationType as any };
       onChange(newInfo);
     }
-  }, [organizationType]);
+  }, [organizationType, issuerInfo?.organizationType, onChange]);
 
   // 組織種別に応じて異なるフォームを表示
   const renderOrganizationSpecificForm = () => {

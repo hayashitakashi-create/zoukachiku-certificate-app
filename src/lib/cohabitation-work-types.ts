@@ -10,80 +10,76 @@ export type CohabitationWorkType = {
 };
 
 export const COHABITATION_WORK_TYPES: CohabitationWorkType[] = [
-  // 台所
+  // 調理室増設
   {
-    code: 'cohab_kitchen',
-    name: '台所の設置工事',
-    unitPrice: 476100,
-    unit: '箇所',
-    category: '台所',
-    description: '調理のために使用する流し又は加熱調理器を設置する工事',
-  },
-
-  // 浴室
-  {
-    code: 'cohab_bathroom',
-    name: '浴室の設置工事',
-    unitPrice: 1283400,
-    unit: '箇所',
-    category: '浴室',
-    description: '浴室を設置する工事',
-  },
-
-  // 便所
-  {
-    code: 'cohab_toilet',
-    name: '便所の設置工事',
-    unitPrice: 476100,
-    unit: '箇所',
-    category: '便所',
-    description: '便所を設置する工事',
-  },
-
-  // 玄関
-  {
-    code: 'cohab_entrance',
-    name: '玄関の設置工事',
-    unitPrice: 476100,
-    unit: '箇所',
-    category: '玄関',
-    description: '玄関を設置する工事',
-  },
-
-  // 給水設備
-  {
-    code: 'cohab_water_supply_general',
-    name: '給水のための設備（一般的な場合）',
-    unitPrice: 193300,
-    unit: '箇所',
-    category: '給排水設備',
-    description: '給水のための設備を設置する工事（一般的な場合）',
-  },
-  {
-    code: 'cohab_water_supply_difficult',
-    name: '給水のための設備（工事が困難な場合）',
-    unitPrice: 514200,
-    unit: '箇所',
-    category: '給排水設備',
-    description: '給水のための設備を設置する工事（工事が著しく困難な場合）',
-  },
-
-  // 排水設備
-  {
-    code: 'cohab_drainage_general',
-    name: '排水のための設備（一般的な場合）',
-    unitPrice: 148900,
-    unit: '箇所',
-    category: '給排水設備',
-    description: '排水のための設備を設置する工事（一般的な場合）',
-  },
-  {
-    code: 'cohab_drainage_difficult',
-    name: '排水のための設備（工事が困難な場合）',
+    code: 'cohab_kitchen_full',
+    name: '調理室増設（ミニキッチン以外のキッチンの設置）',
     unitPrice: 1622000,
     unit: '箇所',
-    category: '給排水設備',
-    description: '排水のための設備を設置する工事（工事が著しく困難な場合）',
+    category: '調理室',
+    description: 'ミニキッチン以外のキッチンを設置する調理室増設工事',
+  },
+  {
+    code: 'cohab_kitchen_mini',
+    name: '調理室増設（ミニキッチンの設置）',
+    unitPrice: 476100,
+    unit: '箇所',
+    category: '調理室',
+    description: 'ミニキッチンを設置する調理室増設工事',
+  },
+
+  // 浴室増設
+  {
+    code: 'cohab_bath_with_heater',
+    name: '浴室増設（給湯設備の設置又は取替えを伴う浴槽の設置）',
+    unitPrice: 1373800,
+    unit: '箇所',
+    category: '浴室',
+    description: '給湯設備の設置又は取替えを伴う浴槽を設置する浴室増設工事',
+  },
+  {
+    code: 'cohab_bath_without_heater',
+    name: '浴室増設（給湯設備の設置又は取替えを伴わない浴槽の設置）',
+    unitPrice: 855400,
+    unit: '箇所',
+    category: '浴室',
+    description: '給湯設備の設置又は取替えを伴わない浴槽を設置する浴室増設工事',
+  },
+  {
+    code: 'cohab_bath_shower_only',
+    name: '浴室増設（浴槽がないシャワー専用の設備の設置）',
+    unitPrice: 584100,
+    unit: '箇所',
+    category: '浴室',
+    description: '浴槽がないシャワー専用の設備を設置する浴室増設工事',
+  },
+
+  // 便所の増設
+  {
+    code: 'cohab_toilet',
+    name: '便所の増設',
+    unitPrice: 526200,
+    unit: '箇所',
+    category: '便所',
+    description: '便所を増設する工事',
+  },
+
+  // 玄関の増設
+  {
+    code: 'cohab_entrance_ground',
+    name: '玄関の増設（地上階にあるもの）',
+    unitPrice: 658700,
+    unit: '箇所',
+    category: '玄関',
+    description: '地上階にある玄関を増設する工事',
+  },
+  {
+    code: 'cohab_entrance_other',
+    name: '玄関の増設（地上階にあるもの以外）',
+    unitPrice: 1254100,
+    unit: '箇所',
+    category: '玄関',
+    description: '地上階にあるもの以外の玄関を増設する工事',
   },
 ];
 

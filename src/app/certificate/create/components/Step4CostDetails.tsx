@@ -42,7 +42,7 @@ export default function Step4CostDetails({ formData, setFormData, effectiveWorkT
                   value={formData.housingLoanCost.totalCost || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
-                    housingLoanCost: { ...prev.housingLoanCost, totalCost: parseInt(e.target.value) || 0 },
+                    housingLoanCost: { ...prev.housingLoanCost, totalCost: Math.max(0, parseInt(e.target.value) || 0) },
                   }))}
                   className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                   placeholder="0"
@@ -96,7 +96,7 @@ export default function Step4CostDetails({ formData, setFormData, effectiveWorkT
                       value={formData.housingLoanCost.subsidyAmount || ''}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
-                        housingLoanCost: { ...prev.housingLoanCost, subsidyAmount: parseInt(e.target.value) || 0 },
+                        housingLoanCost: { ...prev.housingLoanCost, subsidyAmount: Math.max(0, parseInt(e.target.value) || 0) },
                       }))}
                       className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                       placeholder="0"
@@ -255,7 +255,7 @@ export default function Step4CostDetails({ formData, setFormData, effectiveWorkT
                           ...prev,
                           reformTaxCost: {
                             ...prev.reformTaxCost,
-                            [key]: { ...prev.reformTaxCost[key], totalAmount: parseInt(e.target.value) || 0 },
+                            [key]: { ...prev.reformTaxCost[key], totalAmount: Math.max(0, parseInt(e.target.value) || 0) },
                           },
                         }))}
                         className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
@@ -293,7 +293,7 @@ export default function Step4CostDetails({ formData, setFormData, effectiveWorkT
                             value={cat.subsidyAmount || ''}
                             onChange={(e) => setFormData(prev => ({
                               ...prev,
-                              reformTaxCost: { ...prev.reformTaxCost, [key]: { ...prev.reformTaxCost[key], subsidyAmount: parseInt(e.target.value) || 0 } },
+                              reformTaxCost: { ...prev.reformTaxCost, [key]: { ...prev.reformTaxCost[key], subsidyAmount: Math.max(0, parseInt(e.target.value) || 0) } },
                             }))}
                             className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                             placeholder="0" />
@@ -342,7 +342,7 @@ export default function Step4CostDetails({ formData, setFormData, effectiveWorkT
                       ...prev,
                       reformTaxCost: {
                         ...prev.reformTaxCost,
-                        [compoundKey]: { ...prev.reformTaxCost[compoundKey], [field]: parseInt(e.target.value) || 0 },
+                        [compoundKey]: { ...prev.reformTaxCost[compoundKey], [field]: Math.max(0, parseInt(e.target.value) || 0) },
                       },
                     }))}
                     className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
@@ -391,7 +391,7 @@ export default function Step4CostDetails({ formData, setFormData, effectiveWorkT
                         value={((rc[compoundKey] as Record<string, number | boolean>)[amountField] as number) || ''}
                         onChange={(e) => setFormData(prev => ({
                           ...prev,
-                          reformTaxCost: { ...prev.reformTaxCost, [compoundKey]: { ...prev.reformTaxCost[compoundKey], [amountField]: parseInt(e.target.value) || 0 } },
+                          reformTaxCost: { ...prev.reformTaxCost, [compoundKey]: { ...prev.reformTaxCost[compoundKey], [amountField]: Math.max(0, parseInt(e.target.value) || 0) } },
                         }))}
                         className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                         placeholder="0" />
@@ -539,7 +539,7 @@ export default function Step4CostDetails({ formData, setFormData, effectiveWorkT
                             ...prev,
                             reformTaxCost: {
                               ...prev.reformTaxCost,
-                              otherRenovation: { ...prev.reformTaxCost.otherRenovation, totalAmount: parseInt(e.target.value) || 0 },
+                              otherRenovation: { ...prev.reformTaxCost.otherRenovation, totalAmount: Math.max(0, parseInt(e.target.value) || 0) },
                             },
                           }))}
                           className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
@@ -577,7 +577,7 @@ export default function Step4CostDetails({ formData, setFormData, effectiveWorkT
                               value={orCat.subsidyAmount || ''}
                               onChange={(e) => setFormData(prev => ({
                                 ...prev,
-                                reformTaxCost: { ...prev.reformTaxCost, otherRenovation: { ...prev.reformTaxCost.otherRenovation, subsidyAmount: parseInt(e.target.value) || 0 } },
+                                reformTaxCost: { ...prev.reformTaxCost, otherRenovation: { ...prev.reformTaxCost.otherRenovation, subsidyAmount: Math.max(0, parseInt(e.target.value) || 0) } },
                               }))}
                               className="flex-1 px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                               placeholder="0" />

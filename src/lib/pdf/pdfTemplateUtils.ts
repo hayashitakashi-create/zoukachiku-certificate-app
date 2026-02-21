@@ -49,8 +49,8 @@ export async function loadTemplateWithFont(): Promise<PdfContext> {
   // fontkit登録
   pdfDoc.registerFontkit(fontkit);
 
-  // 日本語フォント読み込み
-  const fontResponse = await fetch('/fonts/NotoSansJP.ttf');
+  // 日本語フォント読み込み（明朝体）
+  const fontResponse = await fetch('/fonts/NotoSerifJP.ttf');
   if (!fontResponse.ok) {
     throw new Error(`Font file not found: ${fontResponse.status}`);
   }
@@ -82,6 +82,28 @@ export function drawText(
 }
 
 /**
+ * テキストを指定幅に収まるようフォントサイズを自動縮小して描画
+ * maxWidth を超える場合、フォントサイズを段階的に縮小する
+ */
+export function drawTextFit(
+  page: PDFPage,
+  text: string,
+  coord: Coord,
+  font: PDFFont,
+  size: number = 9,
+  maxWidth: number = 999
+): void {
+  let currentSize = size;
+  const minSize = 5; // 最小フォントサイズ
+  while (currentSize > minSize) {
+    const textWidth = font.widthOfTextAtSize(text, currentSize);
+    if (textWidth <= maxWidth) break;
+    currentSize -= 0.5;
+  }
+  drawText(page, text, coord, font, currentSize);
+}
+
+/**
  * チェックマークを描画
  */
 export function drawCheckmark(
@@ -108,7 +130,8 @@ export function drawAmount(
   font: PDFFont,
   size: number = 9
 ): void {
-  drawText(page, amount.toLocaleString(), coord, font, size);
+  const safeAmount = (typeof amount === 'number' && isFinite(amount)) ? Math.max(0, Math.round(amount)) : 0;
+  drawText(page, safeAmount.toLocaleString(), coord, font, size);
 }
 
 /**
@@ -282,12 +305,19 @@ export function fillIssuerInfo(
 
   const info = certificate.issuerInfo;
 
+  // フィールド幅の定数（テンプレートPDF座標から算出）
+  const REG_NUM_MAX_W = 55;   // 登録番号: x 450→505.8
+  const REG_PREF_MAX_W = 55;  // 都道府県名: x 450→505.8
+  const OFFICE_REG_MAX_W = 120; // 事務所登録: x 385→505.8
+  const NAME_MAX_W = 275;     // 氏名/名称: x 230→505.8
+  const ADDR_MAX_W = 275;     // 所在地: x 230→505.8
+
   if (info && info.organizationType === 'registered_architect_office') {
     // --- リッチデータ: 登録建築士事務所に属する建築士 ---
 
     // 建築士 氏名
     if (info.architectName) {
-      drawText(page, info.architectName, coords.issuerName, font);
+      drawTextFit(page, info.architectName, coords.issuerName, font, 9, NAME_MAX_W);
     }
 
     // 建築士資格種別（一級/二級/木造）
@@ -295,62 +325,62 @@ export function fillIssuerInfo(
       drawText(page, getArchitectQualificationLabel(info.architectQualification), coords.architectQualification, font);
     }
 
-    // 登録番号
+    // 登録番号（幅が狭いため自動縮小）
     if (info.architectRegistrationNumber) {
-      drawText(page, info.architectRegistrationNumber, coords.registrationNumber, font);
+      drawTextFit(page, info.architectRegistrationNumber, coords.registrationNumber, font, 9, REG_NUM_MAX_W);
     }
 
     // 登録を受けた都道府県名（二級/木造の場合）
     if (info.architectRegistrationPrefecture) {
-      drawText(page, info.architectRegistrationPrefecture, coords.registrationPrefecture, font);
+      drawTextFit(page, info.architectRegistrationPrefecture, coords.registrationPrefecture, font, 9, REG_PREF_MAX_W);
     }
 
     // 事務所名称
     if (info.officeName) {
-      drawText(page, info.officeName, coords.officeName, font);
+      drawTextFit(page, info.officeName, coords.officeName, font, 9, NAME_MAX_W);
     }
 
     // 事務所所在地
     if (info.officeAddress) {
-      drawText(page, info.officeAddress, coords.officeAddress, font);
+      drawTextFit(page, info.officeAddress, coords.officeAddress, font, 9, ADDR_MAX_W);
     }
 
     // 事務所の別（一級/二級/木造建築士事務所）
     if (info.officeType) {
-      drawText(page, getOfficeTypeLabel(info.officeType), coords.officeType, font);
+      drawTextFit(page, getOfficeTypeLabel(info.officeType), coords.officeType, font, 9, OFFICE_REG_MAX_W);
     }
 
     // 事務所登録年月日
     if (info.officeRegistrationDate) {
-      drawText(page, info.officeRegistrationDate, coords.officeRegistrationDate, font);
+      drawTextFit(page, info.officeRegistrationDate, coords.officeRegistrationDate, font, 9, OFFICE_REG_MAX_W);
     }
 
     // 事務所登録番号
     if (info.officeRegistrationNumber) {
-      drawText(page, info.officeRegistrationNumber, coords.officeRegistrationNumber, font);
+      drawTextFit(page, info.officeRegistrationNumber, coords.officeRegistrationNumber, font, 9, OFFICE_REG_MAX_W);
     }
   } else {
     // --- フォールバック: フラットフィールド（旧データ or 他の組織種別） ---
 
     // 建築士 氏名
     if (certificate.issuerName) {
-      drawText(page, certificate.issuerName, coords.issuerName, font);
+      drawTextFit(page, certificate.issuerName, coords.issuerName, font, 9, NAME_MAX_W);
     }
 
-    // 登録番号
+    // 登録番号（幅が狭いため自動縮小）
     if (certificate.issuerQualificationNumber) {
-      drawText(page, certificate.issuerQualificationNumber, coords.registrationNumber, font);
+      drawTextFit(page, certificate.issuerQualificationNumber, coords.registrationNumber, font, 9, REG_NUM_MAX_W);
     }
 
     // 事務所名称
     if (certificate.issuerOfficeName) {
-      drawText(page, certificate.issuerOfficeName, coords.officeName, font);
+      drawTextFit(page, certificate.issuerOfficeName, coords.officeName, font, 9, NAME_MAX_W);
     }
 
     // 事務所種別（日本語ラベルに変換）
     if (certificate.issuerOrganizationType) {
       const label = getOrganizationTypeLabel(certificate.issuerOrganizationType) || certificate.issuerOrganizationType;
-      drawText(page, label, coords.officeType, font);
+      drawTextFit(page, label, coords.officeType, font, 9, OFFICE_REG_MAX_W);
     }
   }
 }

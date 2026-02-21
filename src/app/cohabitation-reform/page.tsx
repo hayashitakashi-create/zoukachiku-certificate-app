@@ -91,6 +91,9 @@ function CohabitationReformContent() {
         })
       );
       localStorage.setItem('calc_result_cohabitation', String(totalAmount));
+      if (data.subsidyAmount > 0) {
+        localStorage.setItem('calc_subsidy_cohabitation', String(data.subsidyAmount));
+      }
       alert(`計算結果: ${totalAmount.toLocaleString()}円\n証明書作成ページに反映します。`);
       window.close();
       router.push('/certificate/create?step=4');

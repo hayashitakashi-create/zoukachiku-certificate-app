@@ -50,6 +50,7 @@ export async function generatePdfForCertificate(
       const works = certificate.works;
       pdfBytes = await generatePropertyTaxPDF({
         ...baseData,
+        workDescription: certificate.workDescriptions?.['property_tax'] || certificate.workDescriptions?.['_all'] || undefined,
         seismic: works.seismic.summary ? {
           totalAmount: works.seismic.summary.totalAmount,
           subsidyAmount: works.seismic.summary.subsidyAmount,
@@ -134,6 +135,7 @@ export async function generatePdfForCertificate(
 
         pdfBytes = await generateReformTaxPDF({
           ...baseData,
+          workDescription: certificate.workDescriptions?.['reform_tax'] || certificate.workDescriptions?.['_all'] || undefined,
           seismic: toWorkCost(rtWorks.seismic.summary, 2_500_000),
           barrierFree: toWorkCost(rtWorks.barrierFree.summary, 2_000_000),
           energySaving: rtWorks.energySaving.summary ? {
@@ -170,7 +172,9 @@ export async function generatePdfForCertificate(
       const totalWorkCost = allSummaries.reduce(
         (sum, s) => sum + (s?.totalAmount ?? 0), 0
       );
-      const totalSubsidy = certificate.subsidyAmount || 0;
+      const totalSubsidy = allSummaries.reduce(
+        (sum, s) => sum + (s?.subsidyAmount ?? 0), 0
+      ) || certificate.subsidyAmount || 0;
       const deductible = Math.max(0, totalWorkCost - totalSubsidy);
 
       const rsDetail = certificate.housingLoanDetail;

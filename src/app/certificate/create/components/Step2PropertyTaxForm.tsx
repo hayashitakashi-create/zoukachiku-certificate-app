@@ -57,7 +57,7 @@ export default function Step2PropertyTaxForm({ formData, setFormData }: StepProp
               value={formData.propertyTaxForm.seismicTotalCost || ''}
               onChange={(e) => setFormData(prev => ({
                 ...prev,
-                propertyTaxForm: { ...prev.propertyTaxForm, seismicTotalCost: Number(e.target.value) || 0 },
+                propertyTaxForm: { ...prev.propertyTaxForm, seismicTotalCost: Math.max(0, Number(e.target.value) || 0) },
               }))}
               className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
               placeholder="0" />
@@ -68,7 +68,7 @@ export default function Step2PropertyTaxForm({ formData, setFormData }: StepProp
               value={formData.propertyTaxForm.seismicCost || ''}
               onChange={(e) => setFormData(prev => ({
                 ...prev,
-                propertyTaxForm: { ...prev.propertyTaxForm, seismicCost: Number(e.target.value) || 0 },
+                propertyTaxForm: { ...prev.propertyTaxForm, seismicCost: Math.max(0, Number(e.target.value) || 0) },
               }))}
               className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
               placeholder="0" />
@@ -189,7 +189,7 @@ export default function Step2PropertyTaxForm({ formData, setFormData }: StepProp
               value={formData.propertyTaxForm.energyTotalCost || ''}
               onChange={(e) => setFormData(prev => ({
                 ...prev,
-                propertyTaxForm: { ...prev.propertyTaxForm, energyTotalCost: Number(e.target.value) || 0 },
+                propertyTaxForm: { ...prev.propertyTaxForm, energyTotalCost: Math.max(0, Number(e.target.value) || 0) },
               }))}
               className="w-full max-w-xs px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
               placeholder="0" />
@@ -204,7 +204,7 @@ export default function Step2PropertyTaxForm({ formData, setFormData }: StepProp
                   value={formData.propertyTaxForm.energyInsulationCost || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
-                    propertyTaxForm: { ...prev.propertyTaxForm, energyInsulationCost: Number(e.target.value) || 0 },
+                    propertyTaxForm: { ...prev.propertyTaxForm, energyInsulationCost: Math.max(0, Number(e.target.value) || 0) },
                   }))}
                   className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                   placeholder="0" />
@@ -242,7 +242,7 @@ export default function Step2PropertyTaxForm({ formData, setFormData }: StepProp
                   value={formData.propertyTaxForm.energyInsulationSubsidy || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
-                    propertyTaxForm: { ...prev.propertyTaxForm, energyInsulationSubsidy: Number(e.target.value) || 0 },
+                    propertyTaxForm: { ...prev.propertyTaxForm, energyInsulationSubsidy: Math.max(0, Number(e.target.value) || 0) },
                   }))}
                   className="w-full max-w-xs px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                   placeholder="0" />
@@ -265,7 +265,7 @@ export default function Step2PropertyTaxForm({ formData, setFormData }: StepProp
                   value={formData.propertyTaxForm.energyEquipmentCost || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
-                    propertyTaxForm: { ...prev.propertyTaxForm, energyEquipmentCost: Number(e.target.value) || 0 },
+                    propertyTaxForm: { ...prev.propertyTaxForm, energyEquipmentCost: Math.max(0, Number(e.target.value) || 0) },
                   }))}
                   className="w-full px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                   placeholder="0" />
@@ -303,7 +303,7 @@ export default function Step2PropertyTaxForm({ formData, setFormData }: StepProp
                   value={formData.propertyTaxForm.energyEquipmentSubsidy || ''}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
-                    propertyTaxForm: { ...prev.propertyTaxForm, energyEquipmentSubsidy: Number(e.target.value) || 0 },
+                    propertyTaxForm: { ...prev.propertyTaxForm, energyEquipmentSubsidy: Math.max(0, Number(e.target.value) || 0) },
                   }))}
                   className="w-full max-w-xs px-3 py-2 text-sm border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors"
                   placeholder="0" />

@@ -7,7 +7,7 @@ import { useSession } from 'next-auth/react';
 import type { IssuerInfo } from '@/types/issuer';
 import IssuerInfoForm from '@/components/issuer/IssuerInfoForm';
 import { convertFormStateToWorkData } from '@/components/CostCalculationStep';
-import type { PurposeType } from '@/lib/store';
+import { certificateStore, type PurposeType } from '@/lib/store';
 import {
   type WizardStep,
   type CertificateFormData,
@@ -33,6 +33,8 @@ export default function CertificateCreatePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [wasRestored, setWasRestored] = useState(false);
+  // 編集モード: URLの ?id= パラメータから既存証明書IDを取得
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // 初期値
   const initialFormData: CertificateFormData = {
@@ -65,10 +67,133 @@ export default function CertificateCreatePage() {
     formData,
     isInitialized,
     session?.user?.id,
+    editingId,
   );
 
-  // ローカルストレージから下書きと証明者設定を復元（初回のみ）
+  // ローカルストレージ or IndexedDB から下書きと証明者設定を復元（初回のみ）
   useEffect(() => {
+    // URLから編集IDを読み取り
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get('id');
+    if (editId) {
+      setEditingId(editId);
+    }
+
+    // === 編集モード: IndexedDB から既存証明書を読み込む ===
+    if (editId) {
+      certificateStore.getCertificate(editId).then(cert => {
+        if (!cert) {
+          console.error('Certificate not found:', editId);
+          setIsInitialized(true);
+          return;
+        }
+
+        if (cert.formDataSnapshot) {
+          // スナップショットから完全復元（defaults とのマージで後方互換性を確保）
+          const parsed = { ...cert.formDataSnapshot };
+          if (!parsed.workDataForm) parsed.workDataForm = {};
+          if (!parsed.workDescriptions) parsed.workDescriptions = {};
+          if (!parsed.selectedWorkTypes) parsed.selectedWorkTypes = [];
+          if (!parsed.housingLoanWorkTypes) parsed.housingLoanWorkTypes = {};
+          // reformTaxWorkTypes: deep merge with defaults
+          {
+            const def = defaultReformTaxWorkTypeForm;
+            const rt = parsed.reformTaxWorkTypes || {};
+            parsed.reformTaxWorkTypes = {
+              seismic: { ...def.seismic, ...rt.seismic },
+              barrierFree: { ...def.barrierFree, ...rt.barrierFree },
+              energySaving: {
+                ...def.energySaving,
+                ...rt.energySaving,
+                lowCarbon: { ...def.energySaving.lowCarbon, ...(rt.energySaving?.lowCarbon || {}) },
+                equipmentTypes: { ...def.energySaving.equipmentTypes, ...(rt.energySaving?.equipmentTypes || {}) },
+                additionalWorks: { ...def.energySaving.additionalWorks, ...(rt.energySaving?.additionalWorks || {}) },
+              },
+              cohabitation: {
+                ...def.cohabitation,
+                ...rt.cohabitation,
+                countBefore: { ...def.cohabitation.countBefore, ...(rt.cohabitation?.countBefore || {}) },
+                countAfter: { ...def.cohabitation.countAfter, ...(rt.cohabitation?.countAfter || {}) },
+              },
+              longTermHousing: { ...def.longTermHousing, ...rt.longTermHousing },
+              childcare: { ...def.childcare, ...rt.childcare },
+              additionalWorks: {
+                work1: { ...def.additionalWorks.work1, ...(rt.additionalWorks?.work1 || {}) },
+                work2: { ...def.additionalWorks.work2, ...(rt.additionalWorks?.work2 || {}) },
+                work3: { ...def.additionalWorks.work3, ...(rt.additionalWorks?.work3 || {}) },
+                work4: { ...def.additionalWorks.work4, ...(rt.additionalWorks?.work4 || {}) },
+                work5: { ...def.additionalWorks.work5, ...(rt.additionalWorks?.work5 || {}) },
+                work6: { ...def.additionalWorks.work6, ...(rt.additionalWorks?.work6 || {}) },
+              },
+            };
+          }
+          // reformTaxCost: deep merge
+          {
+            const def = defaultReformTaxCostForm;
+            const rc = parsed.reformTaxCost || {};
+            parsed.reformTaxCost = {
+              seismic: { ...def.seismic, ...rc.seismic },
+              barrierFree: { ...def.barrierFree, ...rc.barrierFree },
+              energySaving: { ...def.energySaving, ...rc.energySaving },
+              cohabitation: { ...def.cohabitation, ...rc.cohabitation },
+              longTermOr: { ...def.longTermOr, ...(rc.longTermOr || {}) },
+              longTermAnd: { ...def.longTermAnd, ...(rc.longTermAnd || {}) },
+              childcare: { ...def.childcare, ...rc.childcare },
+              otherRenovation: { ...def.otherRenovation, ...rc.otherRenovation },
+            };
+          }
+          if (!parsed.propertyTaxForm) parsed.propertyTaxForm = { ...defaultPropertyTaxForm };
+          if (!parsed.housingLoanCost) parsed.housingLoanCost = { totalCost: 0, hasSubsidy: false, subsidyAmount: 0 };
+          setFormData(parsed);
+        } else {
+          // スナップショットなし（旧データ）: Certificate からベストエフォート復元
+          const loaded: CertificateFormData = {
+            ...initialFormData,
+            applicantName: cert.applicantName,
+            applicantAddress: cert.applicantAddress,
+            propertyNumber: cert.propertyNumber,
+            propertyAddress: cert.propertyAddress,
+            completionDate: cert.completionDate,
+            purposeType: cert.purposeType,
+            workDescriptions: cert.workDescriptions || {},
+            issuerInfo: cert.issuerInfo || null,
+            issueDate: cert.issueDate,
+          };
+          // housing_loan / resale: 詳細データを復元
+          if (cert.housingLoanDetail) {
+            loaded.housingLoanWorkTypes = cert.housingLoanDetail.workTypes || {};
+            loaded.housingLoanCost = {
+              totalCost: cert.housingLoanDetail.totalCost,
+              hasSubsidy: cert.housingLoanDetail.hasSubsidy,
+              subsidyAmount: cert.housingLoanDetail.subsidyAmount,
+            };
+          }
+          // reform_tax: 費用データを部分復元
+          if (cert.reformTaxDetail) {
+            const rd = cert.reformTaxDetail;
+            const toCostCat = (d: { totalAmount: number; subsidyAmount: number } | undefined) =>
+              d ? { totalAmount: d.totalAmount, hasSubsidy: d.subsidyAmount > 0, subsidyAmount: d.subsidyAmount } : { ...defaultReformTaxCostForm.seismic };
+            loaded.reformTaxCost = {
+              ...defaultReformTaxCostForm,
+              seismic: toCostCat(rd.seismic),
+              barrierFree: toCostCat(rd.barrierFree),
+              energySaving: { ...toCostCat(rd.energySaving), hasSolarPower: rd.energySaving?.hasSolarPower || false },
+              cohabitation: toCostCat(rd.cohabitation),
+              childcare: toCostCat(rd.childcare),
+              otherRenovation: toCostCat(rd.otherRenovation),
+            };
+          }
+          setFormData(loaded);
+        }
+        setIsInitialized(true);
+      }).catch(err => {
+        console.error('Failed to load certificate for editing:', err);
+        setIsInitialized(true);
+      });
+      return;
+    }
+
+    // === 新規作成モード: ローカルストレージから復元 ===
     let currentSessionId = sessionStorage.getItem('certificate-session-id');
     if (!currentSessionId) {
       currentSessionId = Date.now().toString() + Math.random().toString(36);
@@ -220,6 +345,7 @@ export default function CertificateCreatePage() {
     };
 
     loadIssuerSettings();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // フォームデータが変更されたらlocalStorageに自動保存
@@ -267,12 +393,17 @@ export default function CertificateCreatePage() {
       for (const [lsKey, category] of Object.entries(lsKeyMap)) {
         const val = localStorage.getItem(lsKey);
         if (val !== null) {
-          const amount = parseInt(val) || 0;
+          const amount = Math.max(0, parseInt(val) || 0);
+          const subsidyKey = `calc_subsidy_${category}`;
+          const subsidyVal = localStorage.getItem(subsidyKey);
+          const subsidyAmount = subsidyVal !== null ? Math.max(0, parseInt(subsidyVal) || 0) : 0;
           (costUpdates as Record<string, unknown>)[category] = {
             ...prev.reformTaxCost[category as keyof ReformTaxCostForm],
             totalAmount: amount,
+            ...(subsidyAmount > 0 ? { hasSubsidy: true, subsidyAmount } : {}),
           };
           localStorage.removeItem(lsKey);
+          if (subsidyVal !== null) localStorage.removeItem(subsidyKey);
           updated = true;
         }
       }
@@ -280,9 +411,16 @@ export default function CertificateCreatePage() {
       // longTermHousing → longTermOr.durabilityTotalAmount に反映
       const lthVal = localStorage.getItem('calc_result_longTermHousing');
       if (lthVal !== null) {
-        const amount = parseInt(lthVal) || 0;
-        costUpdates.longTermOr = { ...prev.reformTaxCost.longTermOr, durabilityTotalAmount: amount };
+        const amount = Math.max(0, parseInt(lthVal) || 0);
+        const lthSubsidyVal = localStorage.getItem('calc_subsidy_longTermHousing');
+        const lthSubsidy = lthSubsidyVal !== null ? Math.max(0, parseInt(lthSubsidyVal) || 0) : 0;
+        costUpdates.longTermOr = {
+          ...prev.reformTaxCost.longTermOr,
+          durabilityTotalAmount: amount,
+          ...(lthSubsidy > 0 ? { durabilityHasSubsidy: true, durabilitySubsidyAmount: lthSubsidy } : {}),
+        };
         localStorage.removeItem('calc_result_longTermHousing');
+        if (lthSubsidyVal !== null) localStorage.removeItem('calc_subsidy_longTermHousing');
         updated = true;
       }
 
@@ -316,6 +454,20 @@ export default function CertificateCreatePage() {
       if (!formData.applicantName || !formData.applicantAddress || !formData.propertyAddress ||
           !formData.completionDate || !formData.purposeType) {
         alert('基本情報の必須項目を入力してください');
+        return;
+      }
+    }
+    if (currentStep === 5) {
+      if (!formData.issueDate) {
+        alert('発行日を入力してください');
+        return;
+      }
+      if (!formData.issuerInfo?.organizationType) {
+        alert('証明者の組織種別を選択してください');
+        return;
+      }
+      if (!formData.issuerInfo?.architectName) {
+        alert('建築士の氏名を入力してください');
         return;
       }
     }
@@ -376,7 +528,7 @@ export default function CertificateCreatePage() {
   const saveCertificate = async (status: 'draft' | 'completed') => {
     setIsSaving(true);
     try {
-      await executeSaveCertificate(formData, status, session?.user?.id, draftId ?? undefined);
+      await executeSaveCertificate(formData, status, session?.user?.id, editingId || draftId || undefined);
 
       // ローカルストレージの下書きをクリア
       localStorage.removeItem('certificate-form-data');
@@ -386,7 +538,8 @@ export default function CertificateCreatePage() {
       setWasRestored(false);
 
       alert(status === 'draft' ? '下書きを保存しました' : '証明書を保存しました');
-      router.push('/');
+      // 編集モードの場合は証明書詳細ページに戻る
+      router.push(editingId ? `/certificate/${editingId}` : '/');
     } catch (error) {
       console.error('Save error:', error);
       alert('保存中にエラーが発生しました');
@@ -402,7 +555,7 @@ export default function CertificateCreatePage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-stone-800 to-amber-900 bg-clip-text text-transparent">
-              増改築等工事証明書 作成
+              増改築等工事証明書 {editingId ? '編集' : '作成'}
             </h1>
             <div className="flex gap-3">
               <button
@@ -476,12 +629,12 @@ export default function CertificateCreatePage() {
               <h2 className="text-xl font-bold mb-4">証明者情報</h2>
               <IssuerInfoForm
                 issuerInfo={formData.issuerInfo}
-                onChange={(newIssuerInfo) => setFormData({ ...formData, issuerInfo: newIssuerInfo })}
+                onChange={(newIssuerInfo) => setFormData(prev => ({ ...prev, issuerInfo: newIssuerInfo }))}
               />
               <div className="mt-6 pt-4 border-t">
                 <label className="block text-sm font-medium text-stone-700 mb-1">発行日 *</label>
                 <input type="date" value={formData.issueDate}
-                  onChange={(e) => setFormData({ ...formData, issueDate: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, issueDate: e.target.value }))}
                   className="max-w-md w-full px-3 py-2 border-2 border-stone-200 rounded-2xl focus:border-amber-500 focus:outline-none transition-colors" />
               </div>
             </div>
