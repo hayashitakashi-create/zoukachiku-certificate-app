@@ -15,18 +15,15 @@ export function useAutoSaveDraft(
   userId: string | undefined,
   editingId?: string | null,
 ) {
-  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(editingId ?? null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRender = useRef(true);
 
   // Restore existing draft ID from sessionStorage on mount
   useEffect(() => {
-    // When editing an existing certificate, use its ID as the draft target
-    if (editingId) {
-      setDraftId(editingId);
-      return;
-    }
+    // When editing an existing certificate, already set via initial state
+    if (editingId) return;
     const existingId = sessionStorage.getItem(SESSION_KEY);
     if (existingId) {
       // Verify it still exists in IndexedDB
